@@ -112,9 +112,34 @@ Raw Alert → Normalize → Scrub PII → Prompt Engine → Claude → Structure
 
 ## Testing
 
+Comprehensive test suite covering real-world scenarios and edge cases.
+
 ```bash
-pytest tests/ -v --cov=core
+# Install dependencies
+pip install -r requirements.txt
+
+# Run full test suite
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ -v --cov=core --cov-report=html
+
+# Run specific test class
+pytest tests/test_triage.py::TestPIIScrubbing -v
 ```
+
+### Test Coverage
+
+The test suite includes:
+
+- **PII Scrubbing Tests**: Validates redaction of emails, IPs, SSNs, credit cards, phone numbers
+- **Real-World Log Tests**: CrowdStrike and Splunk alert formats with complex nested structures
+- **Prompt Injection Defense**: Verifies XML delimiters prevent adversarial log content from escaping
+- **End-to-End Pipeline**: Proves PII never reaches the LLM through the entire flow
+- **Schema Validation**: Ensures Pydantic catches malformed inputs
+- **Edge Cases**: Array scrubbing, nested objects, multiple PII types in single fields
+
+Code without tests is just a suggestion. These tests prove the system handles production complexity.
 
 ## Design Decisions
 
