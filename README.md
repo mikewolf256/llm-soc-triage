@@ -32,49 +32,35 @@ Raw Alert → Schema Validation → PII Scrubbing → RAG Context → Secure Pro
 ### Data Flow Diagram
 
 ```mermaid
-flowchart TD
-    classDef gate_in fill:#fee2e2,stroke:#ef4444,stroke-width:2px
-    classDef gate_exec fill:#fef9c3,stroke:#eab308,stroke-width:2px
-    classDef gate_out fill:#dcfce7,stroke:#22c55e,stroke-width:2px
-    classDef storage fill:#e0f2fe,stroke:#0ea5e9,stroke-width:2px
-
-    subgraph Internal [" Internal VPC Infrastructure "]
-        direction TB
-
-        subgraph Inbound ["1. Inbound Gate: Privacy Boundary"]
-            direction LR
-            A([Raw Alert]) --> Val1[Schema Validation]
-            Val1 --> Scrub[[PII Scrubber]]:::gate_in
-        end
-
-        subgraph Reasoning ["2. Execution Gate: Grounded Reasoning"]
-            direction TB
-            
-            Scrub --> Context[Context Manager]
-            VDB[(Vector DB)]:::storage -.->|RAG| Context
-            BIZ[(Business Context)]:::storage -.->|Enrich| Context
-            Context --> Prompt[[Prompt Engine]]:::gate_exec
-        end
-
-        subgraph Outbound ["3. Outbound Gate: Type Safety"]
-            direction LR
-            Parse[Response Parser] --> Val2[[Pydantic Validator]]:::gate_out
-            Val2 --> Final([TriageResponse])
-        end
-    end
-
-    subgraph External [" External API "]
-        LLM{Claude 3.5 Sonnet}
-    end
-
-    Prompt ==>|Sanitized| LLM
-    LLM ==>|Raw JSON| Parse
+flowchart TB
+    A([Raw Alert]) --> B[Schema Validation]
+    B --> C[[PII Scrubber]]
     
-    Final --> SOAR[SOAR System]
-    Final --> Audit[(Audit Log)]
+    C --> D[Context Manager]
     
-    style Internal fill:#f0f9ff,stroke:#0369a1,stroke-width:2px
-    style External fill:#fef2f2,stroke:#b91c1c,stroke-width:2px,stroke-dasharray: 5 5
+    VDB[(Vector DB<br/>Historical Data)] -.->|RAG| D
+    BIZ[(Business Rules<br/>Assets & Users)] -.->|Enrich| D
+    
+    D --> E[[Prompt Engine<br/>XML Delimiters]]
+    
+    E ==> F{Claude API<br/>EXTERNAL}
+    
+    F ==> G[Response Parser]
+    
+    G --> H[[Output Validator]]
+    
+    H --> I([Triage Response])
+    
+    I --> J[SOAR System]
+    I --> K[(Audit Log)]
+    
+    style C fill:#fca5a5,stroke:#dc2626,stroke-width:3px,color:#000
+    style E fill:#fde047,stroke:#ca8a04,stroke-width:3px,color:#000
+    style H fill:#86efac,stroke:#16a34a,stroke-width:3px,color:#000
+    style F fill:#f1f5f9,stroke:#64748b,stroke-width:3px,stroke-dasharray:5 5
+    style VDB fill:#bae6fd,stroke:#0284c7,stroke-width:2px
+    style BIZ fill:#bae6fd,stroke:#0284c7,stroke-width:2px
+    style K fill:#bae6fd,stroke:#0284c7,stroke-width:2px
 ```
 
 ### Three-Layer Security Model
