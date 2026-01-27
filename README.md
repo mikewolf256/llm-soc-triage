@@ -33,35 +33,48 @@ Raw Alert → Schema Validation → PII Scrubbing → RAG Context → Secure Pro
 
 ```mermaid
 flowchart TD
-    %% Define the high-level boundary
-    subgraph System ["SOC Triage Engine: Modular Grid"]
+    classDef gate_in fill:#fee2e2,stroke:#ef4444,stroke-width:2px
+    classDef gate_exec fill:#fef9c3,stroke:#eab308,stroke-width:2px
+    classDef gate_out fill:#dcfce7,stroke:#22c55e,stroke-width:2px
+    classDef storage fill:#e0f2fe,stroke:#0ea5e9,stroke-width:2px
+
+    subgraph Internal [" Internal VPC Infrastructure "]
         direction TB
 
-        subgraph Inbound ["1. Data Entry & Privacy"]
-            A([Raw Alert]) --> B[Schema Validation]
-            B --> C[[PII Scrubber: Presidio]]
+        subgraph Inbound ["1. Inbound Gate: Privacy Boundary"]
+            direction LR
+            A([Raw Alert]) --> Val1[Schema Validation]
+            Val1 --> Scrub[[PII Scrubber]]:::gate_in
         end
 
-        subgraph Reasoning ["2. Context & LLM"]
-            C --> D[Business Context Manager]
-            D --> E[[Prompt Engine: XML Tags]]
-            E --> F{Claude / ChatGPT}
+        subgraph Reasoning ["2. Execution Gate: Grounded Reasoning"]
+            direction TB
+            
+            Scrub --> Context[Context Manager]
+            VDB[(Vector DB)]:::storage -.->|RAG| Context
+            BIZ[(Business Context)]:::storage -.->|Enrich| Context
+            Context --> Prompt[[Prompt Engine]]:::gate_exec
         end
 
-        subgraph Resolution ["3. Validation & Output"]
-            F --> G[Response Parser]
-            G --> H[[Outbound Pydantic Gate]]
-            H --> I([TriageResponse])
+        subgraph Outbound ["3. Outbound Gate: Type Safety"]
+            direction LR
+            Parse[Response Parser] --> Val2[[Pydantic Validator]]:::gate_out
+            Val2 --> Final([TriageResponse])
         end
     end
 
-    I --> SOAR[SOAR System]
-    I --> Audit[(Audit Log)]
+    subgraph External [" External API "]
+        LLM{Claude 3.5 Sonnet}
+    end
 
-    %% Highlighting the Safety Gates
-    style C fill:#ff6b6b,color:#fff
-    style E fill:#ffd43b,color:#000
-    style H fill:#51cf66,color:#fff
+    Prompt ==>|Sanitized| LLM
+    LLM ==>|Raw JSON| Parse
+    
+    Final --> SOAR[SOAR System]
+    Final --> Audit[(Audit Log)]
+    
+    style Internal fill:#f0f9ff,stroke:#0369a1,stroke-width:2px
+    style External fill:#fef2f2,stroke:#b91c1c,stroke-width:2px,stroke-dasharray: 5 5
 ```
 
 ### Three-Layer Security Model
