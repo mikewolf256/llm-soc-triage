@@ -32,59 +32,43 @@ Raw Alert → Schema Validation → PII Scrubbing → RAG Context → Secure Pro
 ### Data Flow Diagram
 
 ```mermaid
-flowchart TD
-    Start[Raw Security Alert] --> Validate[Schema Validation]
-    
-    Validate --> Scrub[PII Scrubber]
-    
-    VectorDB[(Vector DB<br/>Historical Tickets)] -.->|RAG| Context
-    ContextStore[(Business Context<br/>Assets/Users/Tools)] -.->|Enrich| Context
-    
-    Scrub --> Context[Context Manager]
-    Context --> Prompt[Prompt Engine<br/>XML Delimiters]
-    
-    Prompt -.->|Secured Prompt| LLM
-    
-    LLM -.->|Raw Response| Parse[Response Parser]
-    
-    Parse --> Validate2[Output Validator]
-    Validate2 --> Response[Triage Response]
-    
-    Response --> SOAR[SOAR System]
-    Response --> Audit[Audit Log]
-    
-    style Scrub fill:#ff6b6b,stroke:#c92a2a,color:#fff,stroke-width:3px
-    style Prompt fill:#ffd43b,stroke:#fab005,color:#000,stroke-width:3px
-    style Validate2 fill:#51cf66,stroke:#37b24d,color:#fff,stroke-width:3px
-    
-    style VectorDB fill:#d0ebff,stroke:#1971c2,stroke-width:2px
-    style ContextStore fill:#d0ebff,stroke:#1971c2,stroke-width:2px
-    
-    style LLM fill:#f8f9fa,stroke:#495057,stroke-width:4px,stroke-dasharray: 8 4
-    
-    subgraph Internal [" Internal Infrastructure - PII Protected "]
-        Validate
-        Scrub
-        Context
-        VectorDB
-        ContextStore
-        Prompt
-        Parse
-        Validate2
-        Response
-        SOAR
-        Audit
+flowchart LR
+    subgraph Internal [" Internal VPC / PII Secure Boundary "]
+        direction TB
+        Start([Raw Security Alert]) --> InGate[Inbound Gate: Schema Validation]
+        InGate --> Scrub[[PII Scrubber: Presidio]]
+        
+        subgraph Enrichment [Context Enrichment Layer]
+            direction LR
+            VDB[(Vector DB)] --- Context[Context Manager]
+            BizDB[(Biz Context)] --- Context
+        end
+        
+        Scrub --> Context
+        Context --> Prompt[[Prompt Engine: XML Delimiters]]
+        
+        Parse[Response Parser] --> OutGate[Outbound Gate: Pydantic Validator]
+        OutGate --> Final([TriageResponse])
+        
+        Final --> SOAR[SOAR Integration]
+        Final --> Audit[(Audit Log)]
     end
-    
-    subgraph External [" External Service - Redacted Data Only "]
-        LLM[Claude API<br/>EXTERNAL]
+
+    subgraph External [" External API "]
+        LLM{Claude 3.5 Sonnet}
     end
-    
-    classDef internalBox fill:#e7f5ff,stroke:#1971c2,stroke-width:2px
-    classDef externalBox fill:#fff5f5,stroke:#c92a2a,stroke-width:2px
-    
-    class Internal internalBox
-    class External externalBox
+
+    %% External Connections
+    Prompt ==>|Sanitized Prompt| LLM
+    LLM ==>|Raw JSON| Parse
+
+    %% Styling
+    style Scrub fill:#ff6b6b,stroke:#c92a2a,color:#fff,stroke-width:2px
+    style Prompt fill:#ffd43b,stroke:#fab005,color:#000,stroke-width:2px
+    style OutGate fill:#51cf66,stroke:#37b24d,color:#fff,stroke-width:2px
+    style LLM fill:#f8f9fa,stroke:#495057,stroke-width:3px,stroke-dasharray: 5 5
+    style Internal fill:#f0f7ff,stroke:#005fb8,stroke-width:2px
+    style External fill:#fff5f5,stroke:#c92a2a,stroke-width:2px
 ```
 
 ### Three-Layer Security Model
