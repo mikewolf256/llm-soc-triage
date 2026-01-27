@@ -23,6 +23,7 @@ from datetime import datetime
 from core.schema import AlertRequest, TriageResponse
 from core.scrubber import scrub_pii
 from core.prompt_engine import build_triage_prompt, parse_triage_response
+from core.context_manager import BusinessContextManager, format_business_context_for_prompt
 
 # Load environment variables
 load_dotenv()
@@ -42,6 +43,9 @@ app = FastAPI(
 
 # Initialize Anthropic client (lazy loaded for better error handling)
 anthropic_client = None
+
+# Initialize Business Context Manager
+business_context_mgr = BusinessContextManager()
 
 def get_llm_client():
     """Lazy initialization of LLM client with error handling"""
@@ -126,20 +130,27 @@ async def triage_alert(
         scrubbed_alert = scrub_pii(alert)
         logger.debug(f"[PII_SCRUBBED] alert_id={alert.alert_id}")
         
-        # Step 2: RAG - Retrieve Historical Context
-        # Interview Point: "This is where institutional knowledge gets leveraged.
+        # Step 2: Enrich with Business Context
+        # Interview Point: "This is the 'secret sauce' - we inject institutional
+        # knowledge about critical assets, VIP users, and approved tools."
+        business_enrichment = business_context_mgr.enrich_alert(scrubbed_alert)
+        context_summary = format_business_context_for_prompt(business_enrichment)
+        logger.debug(f"[BUSINESS_CONTEXT] alert_id={alert.alert_id} enriched={bool(business_enrichment.get('business_context'))}")
+        
+        # Step 3: RAG - Retrieve Historical Context
+        # Interview Point: "This is where historical knowledge gets leveraged.
         # If we've seen similar alerts before, we surface how they were resolved."
         historical_context = retrieve_historical_context(alert)
         logger.debug(f"[RAG_RETRIEVED] alert_id={alert.alert_id} similar_case={historical_context.get('similar_case_id')} score={historical_context.get('similarity_score')}")
         
-        # Step 3: Build Secure Prompt with XML Delimiters
+        # Step 4: Build Secure Prompt with XML Delimiters
         # Interview Point: "The XML tags prevent prompt injection. If an attacker
         # puts 'Ignore previous instructions' in a log file, the LLM won't follow it
         # because it's clearly marked as untrusted data."
-        prompt = build_triage_prompt(scrubbed_alert)
+        prompt = build_triage_prompt(scrubbed_alert, business_context=context_summary)
         logger.debug(f"[PROMPT_BUILT] alert_id={alert.alert_id} length={len(prompt)}")
         
-        # Step 4: Structured LLM Call
+        # Step 5: Structured LLM Call
         client = get_llm_client()
         message = client.messages.create(
             model=os.getenv("MODEL_NAME", "claude-3-5-sonnet-20241022"),
@@ -153,19 +164,26 @@ async def triage_alert(
             ]
         )
         
-        # Step 5: Parse XML Response into Structured Output
+        # Step 6: Parse XML Response into Structured Output
         response_text = message.content[0].text
         parsed_response = parse_triage_response(response_text)
         
-        # Step 6: Build Response with Metadata
+        # Calculate risk score based on business context
+        base_risk = parsed_response.get("risk_score", 50)
+        risk_multiplier = business_enrichment.get("business_context", {}).get("risk_multiplier", 1.0)
+        adjusted_risk = min(100, int(base_risk * risk_multiplier))
+        
+        # Step 7: Build Response with Metadata (Outbound Gate validates here)
         triage_response = TriageResponse(
             alert_id=alert.alert_id,
             triage_result=parsed_response.get("triage_result", "NEEDS_INVESTIGATION"),
             confidence=parsed_response.get("confidence", 0.0),
+            risk_score=adjusted_risk,
             reasoning=parsed_response.get("reasoning", response_text),
-            next_actions=parsed_response.get("next_actions", []),
+            next_actions=parsed_response.get("next_actions", ["Review alert details and context"]),
             iocs=parsed_response.get("iocs", []),
-            model_used=os.getenv("MODEL_NAME", "claude-3-5-sonnet-20241022")
+            model_used=os.getenv("MODEL_NAME", "claude-3-5-sonnet-20241022"),
+            business_context_applied=bool(business_enrichment.get("business_context"))
         )
         
         duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000

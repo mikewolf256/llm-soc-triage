@@ -1,0 +1,132 @@
+{
+  "critical_assets": {
+    "servers": [
+      {
+        "hostname": "prod-db-01.internal",
+        "role": "Primary Database Server",
+        "risk_level": "critical",
+        "allowed_users": ["dba_team", "svc_backup"]
+      },
+      {
+        "hostname": "api-gateway-prod.internal",
+        "role": "Customer-Facing API",
+        "risk_level": "critical",
+        "allowed_users": ["svc_api", "platform_team"]
+      },
+      {
+        "hostname": "accounting-app-01.internal",
+        "role": "Financial Reconciliation System",
+        "risk_level": "critical",
+        "allowed_users": ["svc_accounting", "finance_team"]
+      }
+    ],
+    "services": [
+      {
+        "name": "payment_processor",
+        "description": "Handles all customer payment transactions",
+        "criticality": "critical"
+      },
+      {
+        "name": "kyc_verification",
+        "description": "Customer identity verification service",
+        "criticality": "high"
+      }
+    ]
+  },
+  "vip_users": [
+    {
+      "user_role": "dba_team",
+      "privileges": ["database_admin", "backup_restore", "schema_modifications"],
+      "justification": "Database administration team with elevated access"
+    },
+    {
+      "user_role": "svc_accounting",
+      "privileges": ["financial_reports", "batch_processing", "scheduled_jobs"],
+      "justification": "Service account for automated financial reconciliation"
+    },
+    {
+      "user_role": "security_team",
+      "privileges": ["forensics", "incident_response", "log_access"],
+      "justification": "Security operations and incident response team"
+    }
+  ],
+  "approved_admin_tools": [
+    {
+      "process": "powershell.exe",
+      "allowed_contexts": [
+        "Signed by Microsoft",
+        "Launched from management console",
+        "Used by svc_backup for scheduled tasks"
+      ],
+      "risk_notes": "PowerShell is approved for admin automation but flagged when used by non-admin accounts"
+    },
+    {
+      "process": "psexec.exe",
+      "allowed_contexts": [
+        "Used by security_team for incident response",
+        "Launched from jump host only"
+      ],
+      "risk_notes": "Legitimate for IR but high risk if used from workstations"
+    },
+    {
+      "process": "sqlcmd.exe",
+      "allowed_contexts": [
+        "Used by dba_team for maintenance",
+        "Restricted to database subnet"
+      ],
+      "risk_notes": "Normal database operations tool"
+    }
+  ],
+  "known_false_positives": [
+    {
+      "pattern": "Multiple failed SSH attempts from 10.50.100.0/24",
+      "reason": "Internal vulnerability scanner subnet",
+      "recommended_action": "close",
+      "last_reviewed": "2026-01-15"
+    },
+    {
+      "pattern": "PowerShell base64 encoding by svc_backup",
+      "reason": "Automated backup script that encodes credentials",
+      "recommended_action": "close",
+      "last_reviewed": "2026-01-10"
+    },
+    {
+      "pattern": "Outbound DNS queries to update.microsoft.com",
+      "reason": "Windows Update service",
+      "recommended_action": "close",
+      "last_reviewed": "2026-01-20"
+    }
+  ],
+  "high_risk_patterns": [
+    {
+      "indicator": "Outbound connection to known C2 infrastructure",
+      "severity_multiplier": 3.0,
+      "recommended_action": "isolate"
+    },
+    {
+      "indicator": "Credential dumping tools (mimikatz, procdump)",
+      "severity_multiplier": 2.5,
+      "recommended_action": "escalate"
+    },
+    {
+      "indicator": "Lateral movement from workstation to server",
+      "severity_multiplier": 2.0,
+      "recommended_action": "investigate"
+    },
+    {
+      "indicator": "Data exfiltration to personal cloud storage",
+      "severity_multiplier": 2.5,
+      "recommended_action": "escalate"
+    }
+  ],
+  "compliance_requirements": {
+    "data_retention_days": 90,
+    "pii_handling": "Must be redacted before external API calls",
+    "audit_trail": "All triage decisions must be logged with justification",
+    "escalation_sla": {
+      "critical": "15 minutes",
+      "high": "1 hour",
+      "medium": "4 hours"
+    }
+  }
+}

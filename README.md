@@ -23,11 +23,55 @@ This project implements a RAG-driven Triage Middleware that:
 - **Orchestration:** MCP (Model Context Protocol) ready
 - **Storage:** ChromaDB for vector search (historical ticket similarity)
 
-## Architecture
+## Architecture: "Sandwiched Safety" Model
 
 ```
 Raw Alert → Schema Validation → PII Scrubbing → RAG Context → Secure Prompt → LLM → Structured Output
 ```
+
+### Data Flow Diagram
+
+```mermaid
+graph TD
+    A[Raw Security Alert] -->|Inbound Gate| B[Pydantic Schema Validation]
+    B -->|Valid Alert| C[PII Scrubber - Presidio]
+    C -->|Redacted Data| D[Business Context Manager]
+    D -->|Enriched Alert| E[Prompt Engine - XML Delimiters]
+    
+    E -->|Execution Gate| F[LLM - Claude 3.5 Sonnet]
+    
+    F -->|Raw Response| G[Response Parser]
+    G -->|Outbound Gate| H[Pydantic Validator]
+    H -->|Type-Safe Output| I[TriageResponse]
+    
+    I --> J[SOAR Integration]
+    I --> K[Audit Log]
+    
+    style C fill:#ff6b6b,stroke:#c92a2a,color:#fff
+    style E fill:#ffd43b,stroke:#fab005,color:#000
+    style H fill:#51cf66,stroke:#37b24d,color:#fff
+    
+    subgraph "Inbound Gate: Data Quality"
+        B
+        C
+    end
+    
+    subgraph "Execution Gate: Prompt Injection Defense"
+        E
+    end
+    
+    subgraph "Outbound Gate: Output Validation"
+        H
+    end
+```
+
+### Three-Layer Security Model
+
+1. **Inbound Gate (Red)**: PII redaction ensures compliance before external API calls
+2. **Execution Gate (Yellow)**: XML delimiters prevent prompt injection from malicious logs  
+3. **Outbound Gate (Green)**: Strict validation ensures LLM outputs are deterministic and SOAR-compatible
+
+This "sandwiched safety" approach ensures the AI cannot "go rogue" in regulated environments.
 
 ## Business Value
 
