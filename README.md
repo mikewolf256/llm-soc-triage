@@ -32,49 +32,59 @@ Raw Alert → Schema Validation → PII Scrubbing → RAG Context → Secure Pro
 ### Data Flow Diagram
 
 ```mermaid
-graph TD
-    A[Raw Security Alert] -->|Inbound Gate| B[Pydantic Schema Validation]
-    B -->|Valid Alert| C[PII Scrubber - Presidio]
-    C -->|Redacted Data| D[Business Context Manager]
+flowchart TD
+    Start[Raw Security Alert] --> Validate[Schema Validation]
     
-    VDB[(Vector Database<br/>ChromaDB<br/>Historical Tickets)] -.->|RAG Retrieval| D
-    BC[(Business Context<br/>Critical Assets<br/>VIP Users<br/>Known FPs)] -.->|Enrichment| D
+    Validate --> Scrub[PII Scrubber]
     
-    D -->|Enriched Alert| E[Prompt Engine - XML Delimiters]
+    VectorDB[(Vector DB<br/>Historical Tickets)] -.->|RAG| Context
+    ContextStore[(Business Context<br/>Assets/Users/Tools)] -.->|Enrich| Context
     
-    E -->|Execution Gate| F{{LLM - Claude 3.5 Sonnet<br/>EXTERNAL API}}
+    Scrub --> Context[Context Manager]
+    Context --> Prompt[Prompt Engine<br/>XML Delimiters]
     
-    F -->|Raw Response| G[Response Parser]
-    G -->|Outbound Gate| H[Pydantic Validator]
-    H -->|Type-Safe Output| I[TriageResponse]
+    Prompt -.->|Secured Prompt| LLM
     
-    I --> J[SOAR Integration]
-    I --> K[Audit Log]
+    LLM -.->|Raw Response| Parse[Response Parser]
     
-    style C fill:#ff6b6b,stroke:#c92a2a,color:#fff
-    style E fill:#ffd43b,stroke:#fab005,color:#000
-    style H fill:#51cf66,stroke:#37b24d,color:#fff
-    style F fill:#e9ecef,stroke:#868e96,stroke-width:3px,stroke-dasharray: 5 5
-    style VDB fill:#e3fafc,stroke:#0c8599
-    style BC fill:#e3fafc,stroke:#0c8599
+    Parse --> Validate2[Output Validator]
+    Validate2 --> Response[Triage Response]
     
-    subgraph Internal["🏢 Internal Infrastructure - Data Never Leaves"]
-        B
-        C
-        D
-        VDB
-        BC
-        E
-        G
-        H
-        I
-        J
-        K
+    Response --> SOAR[SOAR System]
+    Response --> Audit[Audit Log]
+    
+    style Scrub fill:#ff6b6b,stroke:#c92a2a,color:#fff,stroke-width:3px
+    style Prompt fill:#ffd43b,stroke:#fab005,color:#000,stroke-width:3px
+    style Validate2 fill:#51cf66,stroke:#37b24d,color:#fff,stroke-width:3px
+    
+    style VectorDB fill:#d0ebff,stroke:#1971c2,stroke-width:2px
+    style ContextStore fill:#d0ebff,stroke:#1971c2,stroke-width:2px
+    
+    style LLM fill:#f8f9fa,stroke:#495057,stroke-width:4px,stroke-dasharray: 8 4
+    
+    subgraph Internal [" Internal Infrastructure - PII Protected "]
+        Validate
+        Scrub
+        Context
+        VectorDB
+        ContextStore
+        Prompt
+        Parse
+        Validate2
+        Response
+        SOAR
+        Audit
     end
     
-    subgraph External["☁️ External Service - PII Already Scrubbed"]
-        F
+    subgraph External [" External Service - Redacted Data Only "]
+        LLM[Claude API<br/>EXTERNAL]
     end
+    
+    classDef internalBox fill:#e7f5ff,stroke:#1971c2,stroke-width:2px
+    classDef externalBox fill:#fff5f5,stroke:#c92a2a,stroke-width:2px
+    
+    class Internal internalBox
+    class External externalBox
 ```
 
 ### Three-Layer Security Model
