@@ -32,53 +32,36 @@ Raw Alert → Schema Validation → PII Scrubbing → RAG Context → Secure Pro
 ### Data Flow Diagram
 
 ```mermaid
-flowchart LR
-    subgraph Internal [" Internal VPC Infrastructure (Secure Boundary) "]
-        direction LR
-        
-        %% Inbound Section
-        subgraph Inbound [" 1. Inbound Gate (Data Quality) "]
-            direction TB
-            Start([Raw Security Alert]) --> Valid[Pydantic Schema Validation]
-            Valid --> Scrub[[PII Scrubber: Presidio]]
+flowchart TD
+    %% Define the high-level boundary
+    subgraph System ["SOC Triage Engine: Modular Grid"]
+        direction TB
+
+        subgraph Inbound ["1. Data Entry & Privacy"]
+            A([Raw Alert]) --> B[Schema Validation]
+            B --> C[[PII Scrubber: Presidio]]
         end
 
-        %% Enrichment Section
-        subgraph Enrichment [" 2. Context & Reasoning "]
-            direction TB
-            Scrub --> Context[Business Context Manager]
-            VDB[(Vector DB)] -.->|RAG| Context
-            Context --> Prompt[[Prompt Engine: XML Delimiters]]
+        subgraph Reasoning ["2. Context & LLM"]
+            C --> D[Business Context Manager]
+            D --> E[[Prompt Engine: XML Tags]]
+            E --> F{Claude / ChatGPT}
         end
 
-        %% Outbound Section
-        subgraph Outbound [" 3. Outbound Gate (Validation) "]
-            direction TB
-            Parse[Response Parser] --> OutGate[[Outbound Pydantic Validator]]
-            OutGate --> Final([Type-Safe TriageResponse])
+        subgraph Resolution ["3. Validation & Output"]
+            F --> G[Response Parser]
+            G --> H[[Outbound Pydantic Gate]]
+            H --> I([TriageResponse])
         end
-
-        %% Final Integration
-        Final --> SOAR[SOAR Integration]
-        Final --> Audit[(Audit Log)]
     end
 
-    %% External LLM Layer
-    subgraph External [" External API "]
-        LLM{Claude 3.5 Sonnet}
-    end
+    I --> SOAR[SOAR System]
+    I --> Audit[(Audit Log)]
 
-    %% Key Cross-Boundary Connections
-    Prompt ==>|Redacted Prompt| LLM
-    LLM ==>|Raw JSON| Parse
-
-    %% Styling based on Three-Layer Security Model
-    style Scrub fill:#ff6b6b,stroke:#c92a2a,color:#fff,stroke-width:2px
-    style Prompt fill:#ffd43b,stroke:#fab005,color:#000,stroke-width:2px
-    style OutGate fill:#51cf66,stroke:#37b24d,color:#fff,stroke-width:2px
-    style LLM fill:#f8f9fa,stroke:#495057,stroke-width:3px,stroke-dasharray: 5 5
-    style Internal fill:#f0f7ff,stroke:#005fb8,stroke-width:2px
-
+    %% Highlighting the Safety Gates
+    style C fill:#ff6b6b,color:#fff
+    style E fill:#ffd43b,color:#000
+    style H fill:#51cf66,color:#fff
 ```
 
 ### Three-Layer Security Model
