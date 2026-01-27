@@ -58,9 +58,9 @@ flowchart TB
     style E fill:#fde047,stroke:#ca8a04,stroke-width:3px,color:#000
     style H fill:#86efac,stroke:#16a34a,stroke-width:3px,color:#000
     style F fill:#f1f5f9,stroke:#64748b,stroke-width:3px,stroke-dasharray:5 5
-    style VDB fill:#bae6fd,stroke:#0284c7,stroke-width:2px
-    style BIZ fill:#bae6fd,stroke:#0284c7,stroke-width:2px
-    style K fill:#bae6fd,stroke:#0284c7,stroke-width:2px
+    style VDB fill:#bae6fd,stroke:#0284c7,stroke-width:2px,color:#000
+    style BIZ fill:#bae6fd,stroke:#0284c7,stroke-width:2px,color:#000
+    style K fill:#bae6fd,stroke:#0284c7,stroke-width:2px,color:#000
 ```
 
 ### Three-Layer Security Model
