@@ -235,20 +235,11 @@ Enforces strict **Outbound Pydantic Validation**. If an LLM hallucinates or retu
 #### Grounded Intelligence (RAG)
 Manages complex **Vector DB** lookups and business context enrichment in a high-performance Python environment, keeping SOAR playbooks lightweight and vendor-agnostic. Historical ticket similarity and business asset mappings are computed efficiently before LLM reasoning.
 
-### Interview Point
+### The Bottom Line
 
-In a fintech environment, we cannot treat the LLM as a trusted component. The middleware ensures we only send redacted data out and only accept validated, schema-compliant data back in. This "sandwiched safety" approach reduces the cost of error by preventing both data leakage and automation failures.
+In regulated environments, we cannot treat the LLM as a trusted component. The middleware ensures we only send redacted data out and only accept validated, schema-compliant data back in. This "sandwiched safety" approach reduces the cost of error by preventing both data leakage and automation failures.
 
 </details>
-
-## Interview Context
-
-This repository demonstrates production-ready system design for AI-powered security operations:
-
-1. **Schema-driven development**: Data contract defined before implementation
-2. **Security-first architecture**: PII never touches external APIs
-3. **Prompt engineering**: Defensive XML structure prevents injection attacks
-4. **Observability**: Complete audit trail for compliance and debugging
 
 ## License
 
