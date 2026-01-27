@@ -1,78 +1,237 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Normalized Security Alert Schema",
-  "description": "Unified alert format for SOC triage, compatible with multiple sources",
+  "description": "Unified alert format for SOC triage with MITRE ATT&CK alignment and RAG context",
   "type": "object",
-  "required": ["alert_id", "severity", "source", "title", "description", "timestamp"],
+  "required": ["incident_metadata", "observables"],
   "properties": {
-    "alert_id": {
-      "type": "string",
-      "description": "Unique identifier for this alert"
+    "incident_metadata": {
+      "type": "object",
+      "required": ["id", "severity", "source", "timestamp"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique alert identifier (UUID v4)"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["Low", "Med", "High", "Crit"],
+          "description": "Normalized severity classification"
+        },
+        "source": {
+          "type": "string",
+          "description": "Source SIEM/EDR platform",
+          "examples": ["crowdstrike", "splunk", "sentinel", "suricata", "wazuh"]
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of alert generation"
+        },
+        "mitre_tactic": {
+          "type": "string",
+          "description": "Primary MITRE ATT&CK tactic",
+          "examples": ["Initial Access", "Execution", "Persistence", "Privilege Escalation", "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement", "Collection", "Command and Control", "Exfiltration", "Impact"]
+        },
+        "mitre_techniques": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$"
+          },
+          "description": "Associated MITRE ATT&CK technique IDs",
+          "examples": [["T1059.001", "T1071.001"]]
+        },
+        "title": {
+          "type": "string",
+          "description": "Brief alert title"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed alert description"
+        }
+      }
     },
-    "severity": {
-      "type": "string",
-      "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
-      "description": "Alert severity classification"
+    "observables": {
+      "type": "object",
+      "description": "Indicators for correlation and enrichment",
+      "properties": {
+        "ips": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "IP addresses involved in the incident"
+        },
+        "domains": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Domain names contacted"
+        },
+        "hashes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "algorithm": {"type": "string", "enum": ["md5", "sha1", "sha256"]},
+              "value": {"type": "string"}
+            }
+          },
+          "description": "File hashes observed"
+        },
+        "usernames": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Usernames involved (post-PII scrubbing)"
+        },
+        "hostnames": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Affected or related hostnames"
+        },
+        "processes": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Process names or command lines"
+        }
+      }
     },
-    "source": {
-      "type": "string",
-      "description": "Source system that generated the alert",
-      "examples": ["crowdstrike", "splunk", "sentinel", "suricata", "wazuh"]
+    "historical_context": {
+      "type": "object",
+      "description": "RAG-retrieved context from vector database",
+      "properties": {
+        "similar_case_id": {
+          "type": "string",
+          "description": "Most similar historical incident ID"
+        },
+        "similarity_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Cosine similarity to historical case"
+        },
+        "previous_disposition": {
+          "type": "string",
+          "enum": ["TP", "FP", "BTP", "Escalated"],
+          "description": "How similar case was resolved (True Positive, False Positive, Benign True Positive)"
+        },
+        "analyst_notes": {
+          "type": "string",
+          "description": "Historical analyst comments from similar cases"
+        }
+      }
     },
-    "title": {
-      "type": "string",
-      "description": "Brief alert title"
-    },
-    "description": {
-      "type": "string",
-      "description": "Detailed alert description"
-    },
-    "timestamp": {
-      "type": "string",
-      "format": "date-time",
-      "description": "ISO 8601 timestamp of alert generation"
-    },
-    "affected_user": {
-      "type": "string",
-      "description": "Username or email of affected user"
-    },
-    "affected_host": {
-      "type": "string",
-      "description": "Hostname or IP address of affected system"
+    "llm_output_requirement": {
+      "type": "object",
+      "description": "Required structured output from LLM",
+      "required": ["recommended_action", "confidence_score"],
+      "properties": {
+        "recommended_action": {
+          "type": "string",
+          "enum": ["isolate", "close", "escalate", "investigate"],
+          "description": "Triage recommendation"
+        },
+        "confidence_score": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Model confidence in recommendation"
+        },
+        "reasoning": {
+          "type": "string",
+          "description": "Detailed justification for recommendation"
+        },
+        "next_actions": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Specific steps for analyst to take"
+        },
+        "iocs_identified": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Confirmed indicators of compromise"
+        }
+      }
     },
     "raw_data": {
       "type": "object",
-      "description": "Original alert payload from source system"
+      "description": "Original alert payload (preserved for audit)"
     }
   },
   "examples": [
     {
-      "alert_id": "CRS-2024-0001",
-      "severity": "HIGH",
-      "source": "crowdstrike",
-      "title": "Suspicious PowerShell Execution",
-      "description": "Detection of base64-encoded PowerShell command with network activity",
-      "timestamp": "2024-01-27T03:45:00Z",
-      "affected_user": "john.doe",
-      "affected_host": "DESKTOP-ABC123",
-      "raw_data": {
-        "detection_id": "ldt:12345",
-        "tactics": ["execution", "command_and_control"],
-        "techniques": ["T1059.001", "T1071.001"]
+      "incident_metadata": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "severity": "High",
+        "source": "crowdstrike",
+        "timestamp": "2024-01-27T03:45:00Z",
+        "mitre_tactic": "Execution",
+        "mitre_techniques": ["T1059.001", "T1071.001"],
+        "title": "Suspicious PowerShell Execution",
+        "description": "Detection of base64-encoded PowerShell command with external network activity"
+      },
+      "observables": {
+        "ips": ["185.220.101.42"],
+        "domains": ["update-checker.xyz"],
+        "hashes": [
+          {
+            "algorithm": "sha256",
+            "value": "a3b2c1d4e5f6789012345678901234567890abcdef1234567890abcdef123456"
+          }
+        ],
+        "usernames": ["[REDACTED]"],
+        "hostnames": ["DESKTOP-ABC123"],
+        "processes": ["powershell.exe -enc JABzAD0ATgBlAHcALQ..."]
+      },
+      "historical_context": {
+        "similar_case_id": "CRS-2024-0089",
+        "similarity_score": 0.87,
+        "previous_disposition": "TP",
+        "analyst_notes": "Cobalt Strike beacon. Isolated endpoint, reimaged. Check for lateral movement."
+      },
+      "llm_output_requirement": {
+        "recommended_action": "isolate",
+        "confidence_score": 0.92,
+        "reasoning": "Base64 PowerShell with known C2 IP. Historical match shows confirmed Cobalt Strike.",
+        "next_actions": [
+          "Immediately isolate endpoint from network",
+          "Dump memory for malware analysis",
+          "Check EDR timeline for lateral movement indicators"
+        ],
+        "iocs_identified": ["185.220.101.42", "update-checker.xyz"]
       }
     },
     {
-      "alert_id": "SPL-2024-0042",
-      "severity": "MEDIUM",
-      "source": "splunk",
-      "title": "Multiple Failed Login Attempts",
-      "description": "15 failed SSH login attempts from 192.168.1.100 in 5 minutes",
-      "timestamp": "2024-01-27T04:12:00Z",
-      "affected_host": "webserver-01",
-      "raw_data": {
-        "source_ip": "192.168.1.100",
-        "failed_count": 15,
-        "time_window": "5m"
+      "incident_metadata": {
+        "id": "660f9511-f3ac-52e5-b827-557766551111",
+        "severity": "Med",
+        "source": "splunk",
+        "timestamp": "2024-01-27T04:12:00Z",
+        "mitre_tactic": "Credential Access",
+        "mitre_techniques": ["T1110.001"],
+        "title": "Multiple Failed Login Attempts",
+        "description": "15 failed SSH login attempts in 5 minutes"
+      },
+      "observables": {
+        "ips": ["192.168.1.100"],
+        "usernames": ["root", "admin", "ubuntu"],
+        "hostnames": ["webserver-01"]
+      },
+      "historical_context": {
+        "similar_case_id": "SPL-2024-0012",
+        "similarity_score": 0.94,
+        "previous_disposition": "FP",
+        "analyst_notes": "Internal scanner. Source IP is from vulnerability management subnet."
+      },
+      "llm_output_requirement": {
+        "recommended_action": "close",
+        "confidence_score": 0.88,
+        "reasoning": "Source IP matches internal vuln scanner. Historical pattern of false positives.",
+        "next_actions": [
+          "Verify source IP in CMDB as authorized scanner",
+          "Close as false positive",
+          "Update detection rule to whitelist scanner subnet"
+        ],
+        "iocs_identified": []
       }
     }
   ]
