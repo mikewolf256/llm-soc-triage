@@ -36,9 +36,13 @@ graph TD
     A[Raw Security Alert] -->|Inbound Gate| B[Pydantic Schema Validation]
     B -->|Valid Alert| C[PII Scrubber - Presidio]
     C -->|Redacted Data| D[Business Context Manager]
+    
+    VDB[(Vector Database<br/>ChromaDB<br/>Historical Tickets)] -.->|RAG Retrieval| D
+    BC[(Business Context<br/>Critical Assets<br/>VIP Users<br/>Known FPs)] -.->|Enrichment| D
+    
     D -->|Enriched Alert| E[Prompt Engine - XML Delimiters]
     
-    E -->|Execution Gate| F[LLM - Claude 3.5 Sonnet]
+    E -->|Execution Gate| F{{LLM - Claude 3.5 Sonnet<br/>EXTERNAL API}}
     
     F -->|Raw Response| G[Response Parser]
     G -->|Outbound Gate| H[Pydantic Validator]
@@ -50,18 +54,26 @@ graph TD
     style C fill:#ff6b6b,stroke:#c92a2a,color:#fff
     style E fill:#ffd43b,stroke:#fab005,color:#000
     style H fill:#51cf66,stroke:#37b24d,color:#fff
+    style F fill:#e9ecef,stroke:#868e96,stroke-width:3px,stroke-dasharray: 5 5
+    style VDB fill:#e3fafc,stroke:#0c8599
+    style BC fill:#e3fafc,stroke:#0c8599
     
-    subgraph "Inbound Gate: Data Quality"
+    subgraph Internal["🏢 Internal Infrastructure - Data Never Leaves"]
         B
         C
-    end
-    
-    subgraph "Execution Gate: Prompt Injection Defense"
+        D
+        VDB
+        BC
         E
+        G
+        H
+        I
+        J
+        K
     end
     
-    subgraph "Outbound Gate: Output Validation"
-        H
+    subgraph External["☁️ External Service - PII Already Scrubbed"]
+        F
     end
 ```
 
@@ -71,7 +83,14 @@ graph TD
 2. **Execution Gate (Yellow)**: XML delimiters prevent prompt injection from malicious logs  
 3. **Outbound Gate (Green)**: Strict validation ensures LLM outputs are deterministic and SOAR-compatible
 
-This "sandwiched safety" approach ensures the AI cannot "go rogue" in regulated environments.
+### Data Residency Strategy
+
+- **Internal Infrastructure (Blue)**: All sensitive data (PII, business context, historical tickets) stays within your infrastructure
+- **External Service (Gray/Dashed)**: Only redacted, anonymized data crosses the network boundary to Claude
+- **Vector Database**: Historical ticket similarity search for institutional knowledge (ChromaDB/Pinecone)
+- **Business Context Store**: Critical assets, VIP users, approved tools, known false positives
+
+This "sandwiched safety" approach ensures the AI cannot "go rogue" in regulated environments while maintaining strict data residency for compliance.
 
 ## Business Value
 
