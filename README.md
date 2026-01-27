@@ -33,42 +33,52 @@ Raw Alert → Schema Validation → PII Scrubbing → RAG Context → Secure Pro
 
 ```mermaid
 flowchart LR
-    subgraph Internal [" Internal VPC / PII Secure Boundary "]
-        direction TB
-        Start([Raw Security Alert]) --> InGate[Inbound Gate: Schema Validation]
-        InGate --> Scrub[[PII Scrubber: Presidio]]
+    subgraph Internal [" Internal VPC Infrastructure (Secure Boundary) "]
+        direction LR
         
-        subgraph Enrichment [Context Enrichment Layer]
-            direction LR
-            VDB[(Vector DB)] --- Context[Context Manager]
-            BizDB[(Biz Context)] --- Context
+        %% Inbound Section
+        subgraph Inbound [" 1. Inbound Gate (Data Quality) "]
+            direction TB
+            Start([Raw Security Alert]) --> Valid[Pydantic Schema Validation]
+            Valid --> Scrub[[PII Scrubber: Presidio]]
         end
-        
-        Scrub --> Context
-        Context --> Prompt[[Prompt Engine: XML Delimiters]]
-        
-        Parse[Response Parser] --> OutGate[Outbound Gate: Pydantic Validator]
-        OutGate --> Final([TriageResponse])
-        
+
+        %% Enrichment Section
+        subgraph Enrichment [" 2. Context & Reasoning "]
+            direction TB
+            Scrub --> Context[Business Context Manager]
+            VDB[(Vector DB)] -.->|RAG| Context
+            Context --> Prompt[[Prompt Engine: XML Delimiters]]
+        end
+
+        %% Outbound Section
+        subgraph Outbound [" 3. Outbound Gate (Validation) "]
+            direction TB
+            Parse[Response Parser] --> OutGate[[Outbound Pydantic Validator]]
+            OutGate --> Final([Type-Safe TriageResponse])
+        end
+
+        %% Final Integration
         Final --> SOAR[SOAR Integration]
         Final --> Audit[(Audit Log)]
     end
 
+    %% External LLM Layer
     subgraph External [" External API "]
         LLM{Claude 3.5 Sonnet}
     end
 
-    %% External Connections
-    Prompt ==>|Sanitized Prompt| LLM
+    %% Key Cross-Boundary Connections
+    Prompt ==>|Redacted Prompt| LLM
     LLM ==>|Raw JSON| Parse
 
-    %% Styling
+    %% Styling based on Three-Layer Security Model
     style Scrub fill:#ff6b6b,stroke:#c92a2a,color:#fff,stroke-width:2px
     style Prompt fill:#ffd43b,stroke:#fab005,color:#000,stroke-width:2px
     style OutGate fill:#51cf66,stroke:#37b24d,color:#fff,stroke-width:2px
     style LLM fill:#f8f9fa,stroke:#495057,stroke-width:3px,stroke-dasharray: 5 5
     style Internal fill:#f0f7ff,stroke:#005fb8,stroke-width:2px
-    style External fill:#fff5f5,stroke:#c92a2a,stroke-width:2px
+
 ```
 
 ### Three-Layer Security Model
