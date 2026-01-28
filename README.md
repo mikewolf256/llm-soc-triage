@@ -313,6 +313,27 @@ Before any data returns to Chronicle:
 - Case data scrubbing configurable (internal vs. external Chronicle instance)
 - MITRE ATT&CK mappings included for threat intel correlation
 
+### Demo and Testing
+
+**Try it now** (no Chronicle credentials required):
+
+```bash
+# Interactive demo with realistic mock data
+python demo_chronicle.py
+
+# Or run specific scenario
+python demo_chronicle.py --scenario high_confidence_idor
+
+# Start mock Chronicle API server
+python tests/fixtures/chronicle_mock_server.py
+```
+
+See [`docs/CHRONICLE_DEMO.md`](docs/CHRONICLE_DEMO.md) for:
+- 4 demo scenarios with expected outcomes
+- Hiring manager presentation guide (10 minutes)
+- Mock Chronicle API server usage
+- Custom scenario creation
+
 ### Setup and Deployment
 
 See [`docs/CHRONICLE_INTEGRATION.md`](docs/CHRONICLE_INTEGRATION.md) for comprehensive setup guide including:
