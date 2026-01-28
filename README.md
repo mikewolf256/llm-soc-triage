@@ -229,7 +229,7 @@ Raw Alert → Normalize → Scrub PII → Prompt Engine → Claude → Structure
 ## Chronicle Integration: Security Data Lake Context
 
 <details>
-<summary><b>Google Chronicle as Alert Source, Enrichment Layer, and SOAR Destination</b></summary>
+<summary><strong>Google Chronicle as Alert Source, Enrichment Layer, and SOAR Destination</strong> (Click to expand)</summary>
 
 ### Overview
 
@@ -425,7 +425,7 @@ See [`docs/CHRONICLE_INTEGRATION.md`](docs/CHRONICLE_INTEGRATION.md) for compreh
 ## Context-Preserving PII Scrubber
 
 <details>
-<summary><b>Production-Grade Privacy Protection with Intelligence Retention</b></summary>
+<summary><strong>Production-Grade Privacy Protection with Intelligence Retention</strong> (Click to expand)</summary>
 
 ### The Challenge: Privacy vs. Context
 
@@ -898,7 +898,7 @@ This system is designed as an **MCP (Model Context Protocol) server**, making it
 ## Design Philosophy
 
 <details>
-<summary><b>Why Middleware? Why not use native SOAR LLM functions?</b></summary>
+<summary><strong>Why Middleware? Why not use native SOAR LLM functions?</strong> (Click to expand)</summary>
 
 ### The "Sandwiched Safety" Model
 
@@ -927,7 +927,7 @@ In regulated environments, we cannot treat the LLM as a trusted component. The m
 ## Advanced Detection: Identity-Aware IDOR Defense
 
 <details>
-<summary><b>Moving from Passive Logging to Active Intent Correlation</b></summary>
+<summary><strong>Moving from Passive Logging to Active Intent Correlation</strong> (Click to expand)</summary>
 
 ### The Attacker's Journey: Understanding IDOR Enumeration
 
@@ -1296,7 +1296,7 @@ Detection events can be ingested into enterprise SIEM platforms for centralized 
 ## KPIs and Success Metrics
 
 <details>
-<summary><b>Measurable Outcomes and Performance Indicators</b></summary>
+<summary><strong>Measurable Outcomes and Performance Indicators</strong> (Click to expand)</summary>
 
 ### Detection Effectiveness
 
