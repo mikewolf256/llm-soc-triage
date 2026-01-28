@@ -39,9 +39,8 @@ LICENSE
 # Tests (not needed in middleware image, but fixtures needed for chronicle-mock)
 # tests/ - commented out to allow fixtures for chronicle-mock build
 
-# Demo scripts (separate container)
+# Demo scripts
 demo_chronicle.py
-tests/fixtures/chronicle_mock_server.py
 
 # Docker
 Dockerfile
