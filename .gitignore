@@ -43,3 +43,33 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Private Strategy & Business IP (local only)
+STRATEGY_PRIVATE.md
+COMPETITIVE_ANALYSIS.md
+ROADMAP_INTERNAL.md
+PRICING.md
+docs/private/
+notes/
+*_CONFIDENTIAL.md
+*_PRIVATE.md
+*.draft
+scratch/
+
+# Customer/Partner Data
+customer_profiles/
+pilot_data/
+
+# Credentials and Secrets (defense in depth)
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+service-account*.json
+*-credentials.json
+
+# Local Development
+.env.local
+.env.dev
+.env.production

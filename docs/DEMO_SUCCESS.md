@@ -1,8 +1,23 @@
 # Chronicle Integration Demo - SUCCESS
 
-## Status: WORKING
+## Status: WORKING ✓
 
 Your Chronicle integration is **fully operational** and successfully processing alerts!
+
+### Latest Updates (2026-01-28)
+
+**Fixed Issues:**
+- ✓ Webhook signature verification now uses raw request body (fixes signature mismatch)
+- ✓ API documentation URLs corrected (/docs and /redoc)
+- ✓ Enhanced error handling in test scripts
+- ✓ All demo scripts are now executable
+
+**What This Means:**
+- Webhook signature verification is production-ready
+- Test scripts provide clear success/failure feedback
+- All demos ready to run without manual fixes
+
+📖 **Quick Start:** See [DEMO_QUICKSTART.md](./DEMO_QUICKSTART.md) for a streamlined guide to running demos.
 
 ---
 
@@ -101,7 +116,8 @@ EOF
 |---------|-----|--------|
 | Middleware API | http://localhost:8000 | WORKING |
 | Health Check | http://localhost:8000/health | WORKING |
-| API Docs | http://localhost:8000/docs | Available |
+| API Docs (Swagger) | http://localhost:8000/docs | Available |
+| API Docs (ReDoc) | http://localhost:8000/redoc | Available |
 | Chronicle Mock | http://localhost:8001 | WORKING |
 | Demo Scenarios | http://localhost:8001/demo/scenarios | WORKING |
 
