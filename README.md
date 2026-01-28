@@ -243,7 +243,7 @@ In regulated environments, we cannot treat the LLM as a trusted component. The m
 
 ---
 
-## 🔍 Advanced Feature: Session-Aware IDOR Detection
+## Advanced Feature: Session-Aware IDOR Detection
 
 <details>
 <summary><b>Ownership-Based Contextual Detection for Web Applications</b></summary>
@@ -266,8 +266,8 @@ This system "stitches" together **Frontend Intent** (RUM/Telemetry) with **Backe
 **Key Innovation**: Track resource ownership from telemetry and **only alert on attempts to access OTHER users' resources**.
 
 ```
-✅ User accesses 10 of THEIR OWN loans → Legitimate (NO ALERT)
-🚨 User accesses 3+ OTHER USERS' loans → IDOR Attack (CRITICAL ALERT)
+[OK] User accesses 10 of THEIR OWN loans → Legitimate (NO ALERT)
+[CRITICAL] User accesses 3+ OTHER USERS' loans → IDOR Attack (CRITICAL ALERT)
 ```
 
 ### Architecture: Stateful Security Sensor
@@ -389,12 +389,12 @@ ACTION: NO ALERT (legitimate business activity)
 
 | Scenario | Traditional Detection | Ownership-Aware Detection |
 |----------|----------------------|---------------------------|
-| User checks own 10 loans | ❌ 10 sequential IDs → ALERT | ✅ User owns all → NO ALERT |
-| User bookmarks old own loan | ❌ Retry → LOG | ✅ Own loan retry → LOG (not tracked) |
-| User legitimately has 15+ loans | ❌ Many IDs → ALERT | ✅ All owned → NO ALERT |
-| **IDOR attack on neighbors** | ⚠️ May miss if < threshold | ✅ 3+ OTHER loans → ALERT |
-| QA tester with test data | ❌ Many test IDs → ALERT | ✅ QA owns test loans → NO ALERT |
-| Recent ownership bug | ❌ Widespread 403s → Noise | 🤖 LLM: "Deployment 2h ago, known bug" |
+| User checks own 10 loans | [FP] 10 sequential IDs → ALERT | [OK] User owns all → NO ALERT |
+| User bookmarks old own loan | [FP] Retry → LOG | [OK] Own loan retry → LOG (not tracked) |
+| User legitimately has 15+ loans | [FP] Many IDs → ALERT | [OK] All owned → NO ALERT |
+| **IDOR attack on neighbors** | [MISS] May miss if < threshold | [DETECTED] 3+ OTHER loans → ALERT |
+| QA tester with test data | [FP] Many test IDs → ALERT | [OK] QA owns test loans → NO ALERT |
+| Recent ownership bug | [FP] Widespread 403s → Noise | [LLM] "Deployment 2h ago, known bug" |
 
 ### Redis Data Structures
 
