@@ -1,4 +1,6 @@
 """
+Copyright (c) 2026 Agentic Security Partners LLC. All Rights Reserved.
+
 Pydantic models for web application telemetry and ownership tracking.
 
 This schema captures frontend RUM (Real User Monitoring) data from DataDog

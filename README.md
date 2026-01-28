@@ -466,4 +466,10 @@ This IDOR detection system lives in a separate module path (`core/schema/web_tel
 
 ## License
 
-MIT
+**Proprietary - All Rights Reserved**
+
+Copyright © 2026 **Agentic Security Partners LLC**. All Rights Reserved.
+
+This software and associated documentation are the proprietary and confidential property of Agentic Security Partners LLC. Unauthorized copying, distribution, modification, or use of this software, via any medium, is strictly prohibited without the express written consent of Agentic Security Partners LLC.
+
+For licensing inquiries, please contact Agentic Security Partners LLC.

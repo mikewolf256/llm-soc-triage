@@ -1,4 +1,6 @@
 """
+Copyright (c) 2026 Agentic Security Partners LLC. All Rights Reserved.
+
 Pydantic models for EDR (Endpoint Detection and Response) event metadata.
 
 This schema captures endpoint security events from EDR agents like

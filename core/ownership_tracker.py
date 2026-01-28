@@ -1,4 +1,6 @@
 """
+Copyright (c) 2026 Agentic Security Partners LLC. All Rights Reserved.
+
 Ownership tracking for resource access patterns.
 
 Maintains Redis-backed mappings of user→owned resources to enable

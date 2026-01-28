@@ -1,4 +1,6 @@
 """
+Copyright (c) 2026 Agentic Security Partners LLC. All Rights Reserved.
+
 Identity-Asset Monitor for ownership-aware IDOR detection.
 
 Core detection engine that distinguishes between:

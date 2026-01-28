@@ -1,4 +1,6 @@
 """
+Copyright (c) 2026 Agentic Security Partners LLC. All Rights Reserved.
+
 Redis connection manager with graceful failover to in-memory cache.
 
 Provides resilient session state management for IDOR detection:

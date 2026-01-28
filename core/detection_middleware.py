@@ -1,4 +1,6 @@
 """
+Copyright (c) 2026 Agentic Security Partners LLC. All Rights Reserved.
+
 Detection middleware orchestration for ownership-aware IDOR detection.
 
 This module ties together all detection components into a cohesive flow:

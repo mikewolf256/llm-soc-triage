@@ -1,4 +1,6 @@
 """
+Copyright (c) 2026 Agentic Security Partners LLC. All Rights Reserved.
+
 RUM (Real User Monitoring) Correlator for telemetry extraction.
 
 Extracts frontend intent signals from HTTP request headers to enable
