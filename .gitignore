@@ -73,3 +73,7 @@ service-account*.json
 .env.local
 .env.dev
 .env.production
+
+# Runtime Directories
+logs/
+examples/
