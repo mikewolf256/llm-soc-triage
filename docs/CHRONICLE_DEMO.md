@@ -3,7 +3,7 @@
 ## Overview
 
 This guide shows how to demo the Chronicle integration using realistic mock data—no Chronicle credentials required. Perfect for:
-- Hiring manager presentations
+- Security leadership presentations
 - Development and testing
 - Customer demos
 - Integration validation
@@ -144,8 +144,8 @@ The mock data includes production-quality Chronicle UDM events with:
 ```json
 {
   "event_type": "HTTP_REQUEST",
-  "product_name": "Elk Web Application Firewall",
-  "vendor_name": "Elk Financial",
+  "product_name": "Acme Web Application Firewall",
+  "vendor_name": "Acme Financial",
   "log_type": "APPLICATION_LOG"
 }
 ```
@@ -159,7 +159,7 @@ The mock data includes production-quality Chronicle UDM events with:
     "user_agent": "Mozilla/5.0...",
     "request_headers": {
       "cookie": "session_id=sess_abc123",
-      "x-elk-id": "sess_abc123",
+      "x-acme-id": "sess_abc123",
       "authorization": "Bearer eyJhbGci..."
     }
   }
@@ -175,7 +175,7 @@ The mock data includes production-quality Chronicle UDM events with:
     "user_display_name": "attacker"
   },
   "ip": ["192.168.1.100"],
-  "hostname": "user_12849-laptop.corp.elk.com",
+  "hostname": "user_12849-laptop.corp.acme.com",
   "location": {
     "city": "San Francisco",
     "region_code": "CA"
@@ -186,7 +186,7 @@ The mock data includes production-quality Chronicle UDM events with:
 **Target** (Resource):
 ```json
 {
-  "url": "https://api.elk.com/api/v1/consumer/loan_applications/4395669",
+  "url": "https://api.acme.com/api/v1/consumer/loan_applications/4395669",
   "resource": {
     "name": "loan_application_4395669",
     "resource_type": "LOAN_APPLICATION"
@@ -215,9 +215,9 @@ The mock data includes production-quality Chronicle UDM events with:
   "indicator_type": "hash",
   "affected_asset_count": 3,
   "affected_asset_names": [
-    "web-server-01.us-west.elk.com",
-    "api-server-02.us-west.elk.com",
-    "db-server-01.us-east.elk.com"
+    "web-server-01.us-west.acme.com",
+    "api-server-02.us-west.acme.com",
+    "db-server-01.us-east.acme.com"
   ],
   "first_seen": "2026-01-10T14:32:00Z",
   "last_seen": "2026-01-27T09:15:00Z"
@@ -268,7 +268,7 @@ The demo visually shows PII scrubbing at security boundaries:
       "email_addresses": ["attacker@evil.com"]
     },
     "ip": ["192.168.1.100"],
-    "hostname": "attacker-laptop.corp.elk.com"
+    "hostname": "attacker-laptop.corp.acme.com"
   }
 }
 ```
@@ -361,7 +361,7 @@ curl -X POST http://localhost:8001/v2/udm/annotate \
 
 ---
 
-## Hiring Manager Demo Script
+## Executive Demo Script
 
 **Duration**: 10 minutes  
 **Goal**: Show Chronicle integration, PII scrubbing, and context-aware detection

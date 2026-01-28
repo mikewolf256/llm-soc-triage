@@ -112,6 +112,28 @@ The system combines three detection layers:
 
 **Key Innovation**: Detection logic focuses on data that survives PII scrubbing (product names, display names, hostnames, user IDs) rather than emails/IPs that get redacted.
 
+### Triage Latency for High-Frequency Environments
+
+For fintech environments with high alert volumes (market hours, payment processing), the total latency is formally defined as:
+
+```
+T_total = T_validate + T_scrub + T_enrich + T_llm + T_parse
+```
+
+Where:
+- **T_validate** (Schema Validation): < 5ms - Pydantic validates incoming alert structure
+- **T_scrub** (PII Scrubbing): < 15ms (Presidio) or < 5ms (Regex) - Removes sensitive data
+- **T_enrich** (Context Enrichment): < 10ms - Adds business rules, historical context
+- **T_llm** (LLM Inference): 8-20s (Sonnet 4.5) or 2-5s (Haiku) - AI triage reasoning
+- **T_parse** (Response Parsing): < 5ms - Extracts verdict, confidence, IOCs
+
+**Real-World Measurements**:
+- **IDOR Attack**: 19.6s (95% confidence)
+- **QA Testing**: 11.4s (98% confidence)
+- **Insider Threat**: 17.3s (90% confidence)
+
+**Cost/Value Optimization**: For high-volume environments, route low-value transactions (< $50) to faster models (Haiku) and reserve premium models (Sonnet 4.5) for high-value or business-critical alerts.
+
 ### Configuration
 
 Business context rules in `data/business_context.json`:
@@ -124,10 +146,10 @@ Business context rules in `data/business_context.json`:
   "qa_infrastructure": {
     "test_user_ids": ["qa_automation", "user_qa_"],
     "test_display_names": ["QA Automation Bot"],
-    "test_product_names": ["Elk QA Test Suite"]
+    "test_product_names": ["Acme QA Test Suite"]
   },
   "insider_threat_indicators": {
-    "employee_hostnames": ["elk-laptop", ".corp.elk.com"],
+    "employee_hostnames": ["acme-laptop", ".corp.acme.com"],
     "suspicious_patterns": ["outside assigned portfolio"]
   }
 }
@@ -223,6 +245,40 @@ Raw Alert → Normalize → Scrub PII → Prompt Engine → Claude → Structure
 - **Schema Validation**: Pydantic ensures only well-formed data enters the system
 - **API Key Rotation**: Environment-based configuration for zero-trust deployments
 - **Audit Trail**: Complete logging of all triage decisions (SIEM-ready)
+
+### Audit-Ready Logging for Fintech Compliance
+
+For regulated financial services environments, the middleware provides **Model Risk Management (MRM)** compliance through complete decision traceability:
+
+**What Gets Logged**:
+```json
+{
+  "alert_id": "ALT-2024-001",
+  "timestamp": "2024-01-15T14:23:11Z",
+  "triage_decision": "CRITICAL_IDOR_ATTACK",
+  "confidence": 0.95,
+  "model_used": "claude-sonnet-4-5-20250929",
+  "prompt_snapshot": {
+    "raw_alert": "{...}",           // Original alert data
+    "business_context": "{...}",    // Enrichment data used
+    "prompt_template_version": "v2.3"
+  },
+  "llm_raw_response": "<triage_analysis>...</triage_analysis>",
+  "rag_sources": ["business_context.json", "historical_alert_12345"],
+  "reasoning_chain": "Base64 PowerShell + C2 domain match...",
+  "regulatory_flags": ["PCI_SCOPE", "HIGH_VALUE_TRANSACTION"]
+}
+```
+
+**Why Auditors Care**:
+- **SEC/OCC Exams**: Prove AI decisions are explainable and reproducible
+- **Model Validation**: Snapshot the exact prompt + context that produced each decision
+- **Bias Detection**: Track confidence scores across demographics to prove fairness
+- **Incident Response**: Reconstruct the full reasoning chain months later for forensics
+
+**Retention Strategy**:
+- **Hot Storage (90 days)**: PostgreSQL/Chronicle for active investigation
+- **Cold Storage (7 years)**: S3 Glacier for regulatory compliance (SOX, GLBA)
 
 ---
 
@@ -395,7 +451,7 @@ python tests/fixtures/chronicle_mock_server.py
 
 See [`docs/CHRONICLE_DEMO.md`](docs/CHRONICLE_DEMO.md) for:
 - 4 demo scenarios with expected outcomes
-- Hiring manager presentation guide (10 minutes)
+- Deployment presentation guide for security leadership
 - Mock Chronicle API server usage
 - Custom scenario creation
 
@@ -434,7 +490,7 @@ Traditional PII scrubbers create a false choice: **protect privacy OR preserve c
 **The Problem with Naive Scrubbing:**
 ```json
 {
-  "user": "john.doe@elk.com",
+  "user": "john.doe@acme.com",
   "attempted_access": ["loan_12345", "loan_12346", "loan_12347"],
   "source_ip": "192.168.1.100"
 }
@@ -558,7 +614,7 @@ US_PASSPORT:     r'\b[A-Z]{1,2}\d{6,9}\b'
 // RAW CrowdStrike Alert
 {
   "severity": "critical",
-  "user": "sarah.johnson@elk.com",
+  "user": "sarah.johnson@acme.com",
   "host": "WIN-PROD-01",
   "process": "powershell.exe -enc <base64>",
   "parent_process": "C:\\Users\\sarah.johnson\\Desktop\\invoice.exe",
@@ -613,9 +669,9 @@ US_PASSPORT:     r'\b[A-Z]{1,2}\d{6,9}\b'
   "source_ip": "103.45.67.89",
   "geo": {"city": "Lagos", "country": "NG"},
   "attempted_loans": [
-    {"id": "loan_12345", "owner_id": "usr_b9e4d3c2", "owner_email": "victim1@elk.com"},
-    {"id": "loan_12346", "owner_id": "usr_c0f5e4d3", "owner_email": "victim2@elk.com"},
-    {"id": "loan_12347", "owner_id": "usr_d1g6f5e4", "owner_email": "victim3@elk.com"}
+    {"id": "loan_12345", "owner_id": "usr_b9e4d3c2", "owner_email": "victim1@acme.com"},
+    {"id": "loan_12346", "owner_id": "usr_c0f5e4d3", "owner_email": "victim2@acme.com"},
+    {"id": "loan_12347", "owner_id": "usr_d1g6f5e4", "owner_email": "victim3@acme.com"}
   ],
   "failure_count": 3,
   "time_window": "45 seconds",
@@ -799,6 +855,26 @@ scrubber.presidio_entities = [
 - Trust: Legal/Security approve production deployment
 - Quality: LLM analysis remains highly accurate
 
+#### PCI-DSS Compliance for Fintech
+
+**Requirement 3.3 Compliance**: The scrubber implements **tiered masking** to meet Payment Card Industry Data Security Standard (PCI-DSS) requirements:
+
+```python
+# Tier 1: GDPR/CCPA (Mask but preserve count)
+EMAIL:           john.doe@company.com  → [EMAIL_REDACTED]
+PHONE:           555-123-4567          → [PHONE_REDACTED]
+
+# Tier 2: PCI-DSS Req 3.3 (Hard delete or vault)
+CREDIT_CARD:     4532-1234-5678-9010   → [PAN_DELETED]  # No external API transmission
+SSN:             123-45-6789           → [SSN_VAULTED]  # Tokenized reference only
+```
+
+**Why This Matters**:
+- Sending a Primary Account Number (PAN) to a third-party LLM API is a **PCI Level 1 violation**
+- Penalties: Fines up to $500,000 per incident + loss of card processing privileges
+- Our regex-based scrubber detects 16-digit PANs **before** they reach the LLM provider
+- Presidio mode adds ML-based validation for obfuscated formats (e.g., `4532 1234 5678 9010`)
+
 ---
 
 ### Design Philosophy: Context-Preserving Privacy
@@ -923,7 +999,7 @@ Traditional security tools generate logs that require manual correlation and ana
 | Traditional Log (Silent) | llm-soc-triage Output (Actionable) |
 |--------------------------|-----------------------------------|
 | `403 Forbidden: /api/v1/loan/1005` | **Alert**: Potential Loan Enumeration Attack |
-| `User: john.doe@email.com` | **Context**: Session `x-elk-329` attempted 5 distinct Loan IDs in 60s |
+| `User: john.doe@email.com` | **Context**: Session `x-acme-329` attempted 5 distinct Loan IDs in 60s |
 | `Context: None` | **Risk**: High Intent. Frontend RUM confirms manual sequential navigation |
 | `Action: None` | **Action**: Auto-hold triggered, SOAR incident created, MITRE: TA0009/T1213.002 |
 

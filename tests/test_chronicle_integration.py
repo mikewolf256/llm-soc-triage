@@ -80,7 +80,7 @@ def sample_udm_alert() -> Dict[str, Any]:
                         "response_code": 403,
                         "request_headers": {
                             "user-agent": "Mozilla/5.0",
-                            "x-elk-id": "sess_abc123"
+                            "x-acme-id": "sess_abc123"
                         }
                     }
                 },

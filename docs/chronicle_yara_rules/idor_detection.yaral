@@ -52,13 +52,13 @@ rule idor_sequential_enumeration_trigger {
     // Extract session identifier (from cookies, headers, or custom fields)
     // Adjust based on your application's session tracking
     $e.network.http.request_headers.cookie matches /session_id=([a-zA-Z0-9\-]+)/
-    or $e.network.http.request_headers["x-elk-id"] != ""
+    or $e.network.http.request_headers["x-acme-id"] != ""
     or $e.network.http.request_headers["x-datadog-session-id"] != ""
   
   match:
     // Group by session identifier over 5-minute window
     $session_id = $e.network.http.request_headers.cookie or 
-                  $e.network.http.request_headers["x-elk-id"] or
+                  $e.network.http.request_headers["x-acme-id"] or
                   $e.network.http.request_headers["x-datadog-session-id"]
     over 5m
   
@@ -128,7 +128,7 @@ rule idor_nonsequential_exploration {
     $e.target.url matches /\/api\/v[12]\/consumer\/loan_applications\/\d+/
   
   match:
-    $session_id = $e.network.http.request_headers["x-elk-id"]
+    $session_id = $e.network.http.request_headers["x-acme-id"]
     over 10m  // Longer window for manual exploration
   
   outcome:
@@ -173,7 +173,7 @@ rule idor_high_velocity_attack {
     $e.target.url matches /\/api\/v[12]\/consumer\/loan_applications\/\d+/
   
   match:
-    $session_id = $e.network.http.request_headers["x-elk-id"]
+    $session_id = $e.network.http.request_headers["x-acme-id"]
     over 1m  // Very tight window
   
   outcome:
