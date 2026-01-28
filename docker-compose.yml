@@ -58,7 +58,7 @@ services:
       - SOAR_PLATFORM=${SOAR_PLATFORM:-generic}
       
       # Logging
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     
     depends_on:
       redis:
@@ -93,7 +93,7 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/"]
