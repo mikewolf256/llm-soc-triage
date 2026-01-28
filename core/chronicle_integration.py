@@ -26,8 +26,17 @@ from datetime import datetime, timedelta
 from enum import Enum
 
 import httpx
-from google.cloud import chronicle
-from google.oauth2 import service_account
+
+# Optional Chronicle SDK imports (only needed for production)
+try:
+    from google.cloud import chronicle
+    from google.oauth2 import service_account
+    CHRONICLE_SDK_AVAILABLE = True
+except ImportError:
+    chronicle = None
+    service_account = None
+    CHRONICLE_SDK_AVAILABLE = False
+    # Chronicle SDK not installed - using mock server for demo
 
 from .scrubber import get_default_scrubber, scrub_pii
 from .schema.chronicle_events import (
@@ -101,15 +110,19 @@ class ChronicleClient:
         
         # Initialize Chronicle API client
         if self.credentials_file and os.path.exists(self.credentials_file):
-            self.credentials = service_account.Credentials.from_service_account_file(
-                self.credentials_file,
-                scopes=["https://www.googleapis.com/auth/chronicle-backstory"]
-            )
-            logger.info(f"Chronicle client initialized for region: {self.region}")
+            if CHRONICLE_SDK_AVAILABLE and service_account:
+                self.credentials = service_account.Credentials.from_service_account_file(
+                    self.credentials_file,
+                    scopes=["https://www.googleapis.com/auth/chronicle-backstory"]
+                )
+                logger.info(f"Chronicle client initialized for region: {self.region}")
+            else:
+                logger.info("Chronicle SDK not installed - using mock server for demo")
+                self.credentials = None
         else:
-            logger.warning(
-                "Chronicle credentials not configured. "
-                "Set CHRONICLE_CREDENTIALS_FILE environment variable."
+            logger.info(
+                "Chronicle credentials not configured - using mock server for demo. "
+                "Set CHRONICLE_CREDENTIALS_FILE for production."
             )
             self.credentials = None
     
