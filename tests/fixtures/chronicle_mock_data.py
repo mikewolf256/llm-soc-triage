@@ -46,8 +46,8 @@ def get_mock_udm_event(
         "metadata": {
             "event_type": "HTTP_REQUEST",
             "event_timestamp": timestamp.isoformat() + "Z",
-            "product_name": "Caribou Web Application Firewall",
-            "vendor_name": "Caribou Financial",
+            "product_name": "Elk Web Application Firewall",
+            "vendor_name": "Elk Financial",
             "log_type": "APPLICATION_LOG",
         },
         "network": {
@@ -55,10 +55,10 @@ def get_mock_udm_event(
                 "method": "GET",
                 "response_code": response_code,
                 "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "referrer": "https://app.caribou.com/dashboard",
+                "referrer": "https://app.elk.com/dashboard",
                 "request_headers": {
                     "cookie": f"session_id={session_id}; user_pref=dark_mode",
-                    "x-caribou-id": session_id,
+                    "x-elk-id": session_id,
                     "x-datadog-session-id": session_id,
                     "accept": "application/json",
                     "authorization": "Bearer eyJhbGciOiJIUzI1NiIs...",
@@ -78,7 +78,7 @@ def get_mock_udm_event(
             },
             "ip": [source_ip],
             "port": random.randint(50000, 60000),
-            "hostname": f"{user_id}-laptop.corp.caribou.com",
+            "hostname": f"{user_id}-laptop.corp.elk.com",
             "location": {
                 "city": "San Francisco",
                 "region_code": "CA",
@@ -86,8 +86,8 @@ def get_mock_udm_event(
             },
         },
         "target": {
-            "url": f"https://api.caribou.com/api/v1/consumer/loan_applications/{loan_id}",
-            "hostname": "api.caribou.com",
+            "url": f"https://api.elk.com/api/v1/consumer/loan_applications/{loan_id}",
+            "hostname": "api.elk.com",
             "port": 443,
             "resource": {
                 "name": f"loan_application_{loan_id}",
@@ -192,7 +192,7 @@ def get_mock_prevalence_response(
     for i in range(min(affected_count, 10)):  # Chronicle returns up to 10
         asset_type = random.choice(["web", "api", "db", "worker", "batch"])
         region = random.choice(["us-east", "us-west", "eu-central"])
-        asset_names.append(f"{asset_type}-server-{i+1:02d}.{region}.caribou.com")
+        asset_names.append(f"{asset_type}-server-{i+1:02d}.{region}.elk.com")
     
     return {
         "indicator": indicator,
@@ -259,7 +259,7 @@ def get_mock_network_context_response(
         last_seen = datetime.utcnow() - timedelta(hours=random.randint(1, 24))
         connection_count = random.randint(50, 500)
         connected_assets = [
-            f"web-server-{i:02d}.us-west.caribou.com"
+            f"web-server-{i:02d}.us-west.elk.com"
             for i in range(1, 6)
         ]
         reputation_score = random.randint(70, 95)
@@ -287,7 +287,7 @@ def get_mock_network_context_response(
             "city": "Unknown",
             "country": "Unknown",
             "asn": f"AS{random.randint(10000, 99999)}",
-            "isp": "Unknown Provider" if not is_known else "Caribou Corporate VPN",
+            "isp": "Unknown Provider" if not is_known else "Elk Corporate VPN",
         },
     }
 
@@ -340,12 +340,12 @@ def get_demo_scenario_qa_testing() -> Dict[str, Any]:
     
     # Mark user as QA tester
     alert["user_id"] = "user_qa_automation_001"
-    alert["udm_events"][0]["principal"]["user"]["email_addresses"] = ["qa-bot@caribou.com"]
+    alert["udm_events"][0]["principal"]["user"]["email_addresses"] = ["qa-bot@elk.com"]
     alert["udm_events"][0]["principal"]["user"]["user_id"] = "user_qa_automation_001"
     
     # Add QA tag to metadata
     for event in alert["udm_events"]:
-        event["metadata"]["product_name"] = "Caribou QA Test Suite"
+        event["metadata"]["product_name"] = "Elk QA Test Suite"
         event["principal"]["user"]["user_display_name"] = "QA Automation Bot"
     
     context = {
@@ -422,8 +422,8 @@ def get_demo_scenario_insider_threat() -> Dict[str, Any]:
     
     # Internal employee account
     alert["user_id"] = "employee_sarah_jenkins"
-    alert["udm_events"][0]["principal"]["user"]["email_addresses"] = ["sarah.jenkins@caribou.com"]
-    alert["udm_events"][0]["principal"]["hostname"] = "CARIBOU-LAPTOP-1234.corp.caribou.com"
+    alert["udm_events"][0]["principal"]["user"]["email_addresses"] = ["sarah.jenkins@elk.com"]
+    alert["udm_events"][0]["principal"]["hostname"] = "ELK-LAPTOP-1234.corp.elk.com"
     
     # Accessing customer loans they shouldn't have access to
     for event in alert["udm_events"]:

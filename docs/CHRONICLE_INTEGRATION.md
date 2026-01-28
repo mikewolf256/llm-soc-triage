@@ -356,7 +356,7 @@ $e.network.http.request_headers.cookie matches /session_id=([a-zA-Z0-9\-]+)/
 
 **Option 2: Custom Header**
 ```yaral
-$e.network.http.request_headers["x-caribou-id"] != ""
+$e.network.http.request_headers["x-elk-id"] != ""
 ```
 
 **Option 3: DataDog RUM**

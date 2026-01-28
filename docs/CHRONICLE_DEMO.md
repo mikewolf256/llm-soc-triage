@@ -144,8 +144,8 @@ The mock data includes production-quality Chronicle UDM events with:
 ```json
 {
   "event_type": "HTTP_REQUEST",
-  "product_name": "Caribou Web Application Firewall",
-  "vendor_name": "Caribou Financial",
+  "product_name": "Elk Web Application Firewall",
+  "vendor_name": "Elk Financial",
   "log_type": "APPLICATION_LOG"
 }
 ```
@@ -159,7 +159,7 @@ The mock data includes production-quality Chronicle UDM events with:
     "user_agent": "Mozilla/5.0...",
     "request_headers": {
       "cookie": "session_id=sess_abc123",
-      "x-caribou-id": "sess_abc123",
+      "x-elk-id": "sess_abc123",
       "authorization": "Bearer eyJhbGci..."
     }
   }
@@ -175,7 +175,7 @@ The mock data includes production-quality Chronicle UDM events with:
     "user_display_name": "attacker"
   },
   "ip": ["192.168.1.100"],
-  "hostname": "user_12849-laptop.corp.caribou.com",
+  "hostname": "user_12849-laptop.corp.elk.com",
   "location": {
     "city": "San Francisco",
     "region_code": "CA"
@@ -186,7 +186,7 @@ The mock data includes production-quality Chronicle UDM events with:
 **Target** (Resource):
 ```json
 {
-  "url": "https://api.caribou.com/api/v1/consumer/loan_applications/4395669",
+  "url": "https://api.elk.com/api/v1/consumer/loan_applications/4395669",
   "resource": {
     "name": "loan_application_4395669",
     "resource_type": "LOAN_APPLICATION"
@@ -215,9 +215,9 @@ The mock data includes production-quality Chronicle UDM events with:
   "indicator_type": "hash",
   "affected_asset_count": 3,
   "affected_asset_names": [
-    "web-server-01.us-west.caribou.com",
-    "api-server-02.us-west.caribou.com",
-    "db-server-01.us-east.caribou.com"
+    "web-server-01.us-west.elk.com",
+    "api-server-02.us-west.elk.com",
+    "db-server-01.us-east.elk.com"
   ],
   "first_seen": "2026-01-10T14:32:00Z",
   "last_seen": "2026-01-27T09:15:00Z"
@@ -268,7 +268,7 @@ The demo visually shows PII scrubbing at security boundaries:
       "email_addresses": ["attacker@evil.com"]
     },
     "ip": ["192.168.1.100"],
-    "hostname": "attacker-laptop.corp.caribou.com"
+    "hostname": "attacker-laptop.corp.elk.com"
   }
 }
 ```

@@ -77,7 +77,7 @@ When analyzing Chronicle IDOR (Insecure Direct Object Reference) alerts, use the
 
 **Use FALSE_POSITIVE when:**
 - Business context says "STRONG RECOMMENDATION: Classify as FALSE_POSITIVE", OR
-- QA/test account activity (qa-bot, QA Automation, Caribou QA Test Suite)
+- QA/test account activity (qa-bot, QA Automation, Elk QA Test Suite)
 - Known employee accessing own resources (legitimate customer access)
 
 **Use INSIDER_THREAT when:**
@@ -179,10 +179,10 @@ Example 4 - QA Testing (False Positive):
   <result>FALSE_POSITIVE</result>
   <confidence>0.98</confidence>
   <reasoning>
-    Activity from qa-bot@caribou.com account with "QA Automation Bot" user display name.
+    Activity from qa-bot@elk.com account with "QA Automation Bot" user display name.
     This is legitimate automated testing of authorization boundaries.
     Pattern matches expected QA regression testing behavior. Business context confirms
-    this is from known QA testing infrastructure (Caribou QA Test Suite).
+    this is from known QA testing infrastructure (Elk QA Test Suite).
   </reasoning>
   <next_actions>
     <action>Close alert as expected QA activity</action>
@@ -196,8 +196,8 @@ Example 5 - Insider Threat:
   <result>INSIDER_THREAT</result>
   <confidence>0.88</confidence>
   <reasoning>
-    Employee sarah.jenkins@caribou.com accessing 6 customer loan applications outside
-    their assigned portfolio. Source is corporate laptop (CARIBOU-LAPTOP-1234), indicating
+    Employee sarah.jenkins@elk.com accessing 6 customer loan applications outside
+    their assigned portfolio. Source is corporate laptop (ELK-LAPTOP-1234), indicating
     insider not external attacker. Security result states "Employee accessing customer loans
     outside their assigned portfolio". Pattern suggests data snooping or unauthorized
     reconnaissance by trusted insider.
@@ -210,7 +210,7 @@ Example 5 - Insider Threat:
   </next_actions>
   <iocs>
     <ioc>employee_sarah_jenkins (user account)</ioc>
-    <ioc>CARIBOU-LAPTOP-1234.corp.caribou.com</ioc>
+    <ioc>ELK-LAPTOP-1234.corp.elk.com</ioc>
   </iocs>
 </triage>
 </examples>

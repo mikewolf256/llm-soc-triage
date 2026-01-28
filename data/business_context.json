@@ -137,13 +137,13 @@
   "qa_infrastructure": {
     "test_user_ids": ["qa_automation", "qa-bot", "user_qa_", "test_user"],
     "test_display_names": ["QA Automation Bot", "QA Bot", "Test Automation", "Selenium"],
-    "test_product_names": ["Caribou QA Test Suite", "QA Test", "Test Suite"],
+    "test_product_names": ["Elk QA Test Suite", "QA Test", "Test Suite"],
     "test_subnets": ["10.100.0.0/16"],
     "test_user_agents": ["QA Automation", "Selenium", "Cypress"]
   },
   "insider_threat_indicators": {
     "employee_user_ids": ["employee_"],
-    "employee_hostnames": ["caribou-laptop", ".corp.caribou.com", "CARIBOU-"],
+    "employee_hostnames": ["elk-laptop", ".corp.elk.com", "ELK-"],
     "suspicious_patterns": [
       "accessing records outside assigned portfolio",
       "employee accessing customer",

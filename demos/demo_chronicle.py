@@ -105,7 +105,7 @@ def simulate_pii_scrubbing(data: Dict[str, Any]) -> Dict[str, Any]:
     json_str = json_str.replace("203.0.113.", "[IP_REDACTED_")
     json_str = json_str.replace("attacker@evil.com", "[EMAIL_REDACTED]")
     json_str = json_str.replace("attacker@example.com", "[EMAIL_REDACTED]")
-    json_str = json_str.replace(".caribou.com", "[HOSTNAME_REDACTED]")
+    json_str = json_str.replace(".elk.com", "[HOSTNAME_REDACTED]")
     
     return json.loads(json_str)
 
