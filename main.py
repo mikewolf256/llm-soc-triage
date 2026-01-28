@@ -20,7 +20,19 @@ from anthropic import Anthropic
 import logging
 from datetime import datetime
 
-from core.schema import AlertRequest, TriageResponse
+# Import from core.schema module (the .py file, not the package directory)
+import sys
+from pathlib import Path
+import importlib.util
+
+# Load schema.py directly to avoid ambiguity with schema/ package
+_schema_path = Path(__file__).parent / "core" / "schema.py"
+_spec = importlib.util.spec_from_file_location("core.schema_models", _schema_path)
+_schema_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_schema_module)
+
+AlertRequest = _schema_module.AlertRequest
+TriageResponse = _schema_module.TriageResponse
 from core.scrubber import scrub_pii
 from core.prompt_engine import build_triage_prompt, parse_triage_response
 from core.context_manager import BusinessContextManager, format_business_context_for_prompt
