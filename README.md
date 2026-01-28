@@ -1022,20 +1022,7 @@ Tracks failures across unique `loan_id` objects within a 60-second sliding windo
 
 **Key Innovation**: Track resource ownership from telemetry and **only alert on attempts to access OTHER users' resources**. This eliminates false positives from legitimate multi-resource users while maintaining zero false negatives on real attacks.
 
-### Feature Spotlight: Intent Stitching via Three-Point Correlation
-
-Standard SIEM rules miss IDORs because they look at requests in isolation. This engine implements **Intent Stitching** by correlating three distinct telemetry layers:
-
-**1. Frontend Intent**  
-Captures `pageloadId`, `session_id`, and sequential navigation patterns via RUM telemetry (DataDog, CloudFlare). Reveals what the user is trying to do from the client-side perspective.
-
-**2. Authorization Boundary**  
-Intercepts `403 Forbidden` events from backend ownership middleware. Captures what the system prevented at the authorization layer.
-
-**3. Stateful Thresholding**  
-Tracks failures across unique `loan_id` objects within a 60-second sliding window using Redis. Distinguishes legitimate retries from active enumeration.
-
-**Architecture**:
+**Architecture Diagram**:
 
 ```mermaid
 flowchart LR
