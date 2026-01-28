@@ -28,6 +28,7 @@ from datetime import datetime
 from enum import Enum
 
 from .schema.web_telemetry import IDORDetectionEvent, AccessAttemptResult
+from .telemetry_scrubber import scrub_event_for_soar
 
 
 logger = logging.getLogger(__name__)
@@ -102,6 +103,7 @@ class SOARIntegration:
         self,
         event: IDORDetectionEvent,
         auto_hold: bool = True,
+        scrub_pii_for_soar: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Send IDOR detection event to SOAR platform.
@@ -109,6 +111,7 @@ class SOARIntegration:
         Args:
             event: Detection event to send
             auto_hold: Whether to trigger auto-hold action
+            scrub_pii_for_soar: Scrub PII before sending (default: from SCRUB_PII_FOR_SOAR env)
         
         Returns:
             dict: Result with success status and incident ID
@@ -124,6 +127,14 @@ class SOARIntegration:
                 "success": False,
                 "error": "SOAR webhook URL not configured"
             }
+        
+        # Check if PII scrubbing is enabled
+        _scrub = scrub_pii_for_soar if scrub_pii_for_soar is not None \
+                 else os.getenv("SCRUB_PII_FOR_SOAR", "false").lower() == "true"
+        
+        if _scrub:
+            logger.info(f"Scrubbing PII from event {event.event_id} before SOAR transmission")
+            event = scrub_event_for_soar(event)
         
         # Format payload for platform
         payload = self._format_payload(event, auto_hold)
@@ -204,6 +215,15 @@ class SOARIntegration:
             
             # Action
             "auto_hold": auto_hold,
+            
+            # MITRE ATT&CK Framework
+            "mitre_tactics": event.mitre_tactics,
+            "mitre_techniques": event.mitre_techniques,
+            "mitre_sub_techniques": event.mitre_sub_techniques or [],
+            "mitre_attack_urls": [
+                f"https://attack.mitre.org/techniques/{t.replace('.', '/')}/"
+                for t in event.mitre_techniques
+            ],
         }
         
         # Platform-specific formatting

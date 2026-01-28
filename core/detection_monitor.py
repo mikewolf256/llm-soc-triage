@@ -349,6 +349,38 @@ class IdentityAssetMonitor:
         
         return is_sequential, numeric_ids
     
+    def _get_mitre_mapping(
+        self,
+        is_sequential: bool,
+        distinct_count: int,
+    ) -> Dict[str, List[str]]:
+        """
+        Determine MITRE mapping based on attack characteristics.
+        
+        Sequential IDOR (automated):
+            TA0009 (Collection) + T1213.002 (Sharepoint/Web Apps)
+        
+        Non-Sequential IDOR (manual exploration with valid creds):
+            TA0009 (Collection) + TA0006 (Credential Access) + T1078.004 (Cloud Accounts)
+        """
+        tactics = ["TA0009"]  # Collection (always primary for IDOR)
+        techniques = ["T1213"]  # Data from Information Repositories
+        sub_techniques = []
+        
+        if is_sequential:
+            # Automated enumeration pattern
+            sub_techniques.append("T1213.002")  # Sharepoint/Web Applications
+        elif distinct_count >= 3:
+            # Manual exploration with unauthorized valid credentials
+            tactics.append("TA0006")  # Credential Access
+            techniques.append("T1078.004")  # Cloud Accounts
+        
+        return {
+            "tactics": tactics,
+            "techniques": techniques,
+            "sub_techniques": sub_techniques,
+        }
+    
     def _create_detection_event(
         self,
         telemetry: WebTelemetryMetadata,
@@ -372,6 +404,9 @@ class IdentityAssetMonitor:
         # Generate event ID
         event_id = f"idor_evt_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         
+        # Get MITRE ATT&CK mapping based on attack characteristics
+        mitre_mapping = self._get_mitre_mapping(is_sequential, distinct_count)
+        
         return IDORDetectionEvent(
             event_id=event_id,
             detection_timestamp=datetime.utcnow(),
@@ -384,6 +419,9 @@ class IdentityAssetMonitor:
             failed_resources=failed_resources,
             resource_owners=resource_owners,
             telemetry_snapshot=telemetry,
+            mitre_tactics=mitre_mapping["tactics"],
+            mitre_techniques=mitre_mapping["techniques"],
+            mitre_sub_techniques=mitre_mapping["sub_techniques"],
         )
     
     def get_session_stats(self, session_id: str) -> Dict[str, Any]:

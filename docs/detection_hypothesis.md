@@ -443,10 +443,97 @@ LLM_ESCALATION_CONFIDENCE = 0.85  # Default: 0.85
 
 ---
 
+## MITRE ATT&CK Framework Mapping
+
+### Tactics
+
+**TA0009: Collection**
+- Primary tactic for all IDOR attacks
+- Adversary attempts to gather information from unauthorized sources
+- Present in both sequential and non-sequential IDOR patterns
+
+**TA0006: Credential Access** (Non-Sequential Only)
+- Secondary tactic for manual enumeration patterns
+- Indicates use of valid but unauthorized credentials
+- Distinguishes manual exploration from automated scripts
+
+### Techniques
+
+**T1213: Data from Information Repositories**
+- Core technique for IDOR exploitation
+- Accessing data in centralized locations (web applications, databases)
+- Applies to all IDOR detection events
+
+**T1078.004: Cloud Accounts** (Non-Sequential Only)
+- Valid account abuse in cloud/SaaS applications
+- Indicates attacker has valid credentials but unauthorized access
+- Distinguishes from pure automation
+
+### Sub-Techniques
+
+**T1213.002: Sharepoint / Web Applications** (Sequential Only)
+- Automated enumeration of web app resources
+- High confidence indicator for scripted attacks
+- Pattern: Sequential resource IDs (loan_12345 → 12346 → 12347)
+
+### Dynamic Mapping Logic
+
+| Attack Pattern | Tactics | Techniques | Sub-Techniques | Confidence |
+|----------------|---------|------------|----------------|------------|
+| 3+ Sequential IDs | TA0009 | T1213 | T1213.002 | CRITICAL |
+| 3+ Non-Sequential | TA0009, TA0006 | T1213, T1078.004 | - | MEDIUM |
+
+### Detection-to-MITRE Workflow
+
+```mermaid
+flowchart TD
+    Detection[IDOR Pattern Detected] --> Sequential{Sequential IDs?}
+    Sequential -->|Yes| AutoScript[Automated Script]
+    Sequential -->|No| Manual[Manual Exploration]
+    AutoScript --> TA0009_A["TA0009: Collection"]
+    AutoScript --> T1213002["T1213.002: Web Apps"]
+    Manual --> TA0009_B["TA0009: Collection"]
+    Manual --> TA0006["TA0006: Credential Access"]
+    Manual --> T1078004["T1078.004: Cloud Accounts"]
+```
+
+### Compliance Benefits
+
+- **SOC Analysts**: Receive standardized threat intelligence aligned with industry frameworks
+- **SOAR Playbooks**: Can auto-select response actions based on MITRE technique IDs
+- **Threat Hunting**: Teams can pivot on MITRE IDs across multiple security tools
+- **Executive Reporting**: Metrics align with industry-standard frameworks (MITRE ATT&CK)
+- **Incident Response**: MITRE URLs included in SOAR alerts for quick reference
+
+### MITRE Field Population
+
+All IDOR detection events automatically include:
+- `mitre_tactics`: Array of tactic IDs (e.g., ["TA0009"])
+- `mitre_techniques`: Array of technique IDs (e.g., ["T1213", "T1078.004"])
+- `mitre_sub_techniques`: Array of sub-technique IDs (e.g., ["T1213.002"])
+- `mitre_attack_urls`: Direct links to technique pages on attack.mitre.org
+
+**Example SOAR Payload**:
+```json
+{
+  "event_id": "idor_evt_20260127_143215_abc123",
+  "severity": "CRITICAL",
+  "mitre_tactics": ["TA0009"],
+  "mitre_techniques": ["T1213"],
+  "mitre_sub_techniques": ["T1213.002"],
+  "mitre_attack_urls": [
+    "https://attack.mitre.org/techniques/T1213/",
+    "https://attack.mitre.org/techniques/T1213/002/"
+  ]
+}
+```
+
+---
+
 ## References
 
 - **Real-World Data**: `/home/mike/deer-burp` - Burp Suite capture with session IDs, loan IDs
-- **MITRE ATT&CK**: T1213 - Data from Information Repositories (IDOR)
+- **MITRE ATT&CK Framework**: [T1213 - Data from Information Repositories](https://attack.mitre.org/techniques/T1213/)
 - **OWASP**: A01:2021 - Broken Access Control
 
 ---

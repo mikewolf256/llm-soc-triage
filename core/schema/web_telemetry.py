@@ -11,7 +11,7 @@ to owned resources from enumeration attacks on other users' data.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
@@ -232,6 +232,20 @@ class IDORDetectionEvent(BaseModel):
     telemetry_snapshot: WebTelemetryMetadata = Field(
         ...,
         description="Most recent telemetry data point"
+    )
+    
+    # MITRE ATT&CK Framework Mapping
+    mitre_tactics: List[str] = Field(
+        default_factory=lambda: ["TA0009"],  # Collection
+        description="MITRE ATT&CK tactics for this attack"
+    )
+    mitre_techniques: List[str] = Field(
+        default_factory=lambda: ["T1213"],  # Data from Information Repositories
+        description="MITRE ATT&CK techniques detected"
+    )
+    mitre_sub_techniques: Optional[List[str]] = Field(
+        default_factory=lambda: ["T1213.002"],  # Sharepoint/Web Apps (default for sequential IDOR)
+        description="MITRE ATT&CK sub-techniques"
     )
     
     class Config:

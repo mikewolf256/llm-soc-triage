@@ -28,6 +28,7 @@ from fastapi import Request, Response
 from .rum_correlator import RUMCorrelator
 from .ownership_tracker import OwnershipTracker
 from .detection_monitor import IdentityAssetMonitor
+from .telemetry_scrubber import scrub_telemetry_for_llm
 from .schema.web_telemetry import (
     WebTelemetryMetadata,
     AccessAttemptResult,
@@ -259,7 +260,7 @@ class DetectionMiddleware:
         telemetry: WebTelemetryMetadata,
     ):
         """
-        Use LLM to add business context for ambiguous patterns.
+        Use LLM to add business context for ambiguous patterns (with PII scrubbing).
         
         LLM analyzes:
         - Is this user a known pentester/QA?
@@ -268,10 +269,15 @@ class DetectionMiddleware:
         - Legitimate reason for multi-resource access?
         
         This prevents false positives while maintaining zero false negatives.
+        PII is scrubbed before sending to external LLM API.
         """
         try:
             if self.llm_callback:
-                context = await self.llm_callback(event, telemetry)
+                # Scrub PII before sending to external LLM API
+                scrubbed_data = scrub_telemetry_for_llm(event, telemetry)
+                
+                # Pass scrubbed data to LLM
+                context = await self.llm_callback(event, scrubbed_data)
                 logger.info(
                     f"LLM context analysis for {event.event_id}: {context.get('verdict')}"
                 )

@@ -544,5 +544,291 @@ class TestEdgeCases:
         assert stats["distinct_resources"] == 2
 
 
+class TestMITREMapping:
+    """Test MITRE ATT&CK framework mapping for IDOR events"""
+    
+    def test_mitre_mapping_sequential_idor(self, detection_monitor):
+        """Verify sequential IDOR gets correct MITRE mapping"""
+        # Create telemetry for sequential IDOR attack (loan_100, 101, 102)
+        telemetry_base = {
+            "user_id": "user_789",
+            "resource_type": ResourceType.LOAN_APPLICATION,
+            "http_method": "GET",
+            "request_path": "/consumer/loan_applications/{}/offers",
+            "failure_type": FailureType.AUTHZ_OWNERSHIP_DENIED,
+        }
+        
+        # Simulate 3 sequential loan access attempts
+        for i in range(100, 103):
+            telemetry = WebTelemetryMetadata(
+                **telemetry_base,
+                datadog_session_id=f"sess_sequential",
+                resource_id=f"loan_{i}",
+                resource_owner_id=f"user_owner_{i}",
+            )
+            result = detection_monitor.track_unauthorized_access(telemetry)
+        
+        # Last result should be CRITICAL with event
+        severity, event = result
+        assert severity == AccessAttemptResult.CRITICAL_IDOR_ATTACK
+        assert event is not None
+        assert event.is_sequential is True
+        
+        # Verify MITRE mapping for sequential pattern
+        assert "TA0009" in event.mitre_tactics  # Collection
+        assert "T1213" in event.mitre_techniques  # Data from Information Repositories
+        assert "T1213.002" in event.mitre_sub_techniques  # Sharepoint/Web Applications
+        
+        # Should NOT have credential access tactics (that's for non-sequential)
+        assert "TA0006" not in event.mitre_tactics
+        assert "T1078.004" not in event.mitre_techniques
+    
+    def test_mitre_mapping_nonsequential_idor(self, detection_monitor):
+        """Verify non-sequential IDOR gets credential access mapping"""
+        # Create telemetry for non-sequential IDOR (scattered IDs)
+        telemetry_base = {
+            "user_id": "user_attacker",
+            "resource_type": ResourceType.LOAN_APPLICATION,
+            "http_method": "GET",
+            "request_path": "/consumer/loan_applications/{}/offers",
+            "failure_type": FailureType.AUTHZ_OWNERSHIP_DENIED,
+        }
+        
+        # Simulate 3 non-sequential loan access attempts
+        non_sequential_ids = ["loan_5432", "loan_9876", "loan_1234"]
+        for loan_id in non_sequential_ids:
+            telemetry = WebTelemetryMetadata(
+                **telemetry_base,
+                datadog_session_id=f"sess_nonseq",
+                resource_id=loan_id,
+                resource_owner_id=f"owner_{loan_id}",
+            )
+            result = detection_monitor.track_unauthorized_access(telemetry)
+        
+        # Last result should be ALERT_MEDIUM with event
+        severity, event = result
+        assert severity == AccessAttemptResult.ALERT_MEDIUM
+        assert event is not None
+        assert event.is_sequential is False
+        
+        # Verify MITRE mapping for non-sequential pattern
+        assert "TA0009" in event.mitre_tactics  # Collection (always)
+        assert "TA0006" in event.mitre_tactics  # Credential Access (added for non-sequential)
+        assert "T1213" in event.mitre_techniques  # Data from Information Repositories
+        assert "T1078.004" in event.mitre_techniques  # Cloud Accounts
+        
+        # Should NOT have sequential sub-technique
+        assert event.mitre_sub_techniques == [] or "T1213.002" not in event.mitre_sub_techniques
+    
+    def test_mitre_urls_in_soar_payload(self, detection_monitor):
+        """Verify MITRE URLs are generated correctly for SOAR"""
+        from core.soar_integration import SOARIntegration
+        
+        # Create a sequential IDOR event
+        telemetry = WebTelemetryMetadata(
+            user_id="user_test",
+            datadog_session_id="sess_test",
+            resource_type=ResourceType.LOAN_APPLICATION,
+            resource_id="loan_100",
+            resource_owner_id="user_owner",
+            http_method="GET",
+            request_path="/consumer/loan_applications/100/offers",
+            failure_type=FailureType.AUTHZ_OWNERSHIP_DENIED,
+        )
+        
+        # Generate multiple attempts to trigger detection
+        for i in range(100, 103):
+            telemetry_seq = WebTelemetryMetadata(
+                user_id="user_test",
+                datadog_session_id="sess_test",
+                resource_type=ResourceType.LOAN_APPLICATION,
+                resource_id=f"loan_{i}",
+                resource_owner_id=f"user_owner_{i}",
+                http_method="GET",
+                request_path=f"/consumer/loan_applications/{i}/offers",
+                failure_type=FailureType.AUTHZ_OWNERSHIP_DENIED,
+            )
+            result = detection_monitor.track_unauthorized_access(telemetry_seq)
+        
+        severity, event = result
+        assert event is not None
+        
+        # Create SOAR integration (without actually sending)
+        soar = SOARIntegration()
+        payload = soar._format_payload(event, auto_hold=True)
+        
+        # Verify MITRE URLs are present
+        assert "mitre_attack_urls" in payload
+        assert len(payload["mitre_attack_urls"]) > 0
+        assert "https://attack.mitre.org/techniques/T1213/" in payload["mitre_attack_urls"]
+
+
+class TestPIIScrubbing:
+    """Test PII scrubbing for telemetry data"""
+    
+    def test_pii_scrubbing_preserves_tokens(self):
+        """Verify PII scrubbed but correlation tokens preserved"""
+        from core.telemetry_scrubber import scrub_telemetry_for_llm
+        from core.schema.web_telemetry import IDORDetectionEvent
+        
+        # Create event with PII
+        telemetry = WebTelemetryMetadata(
+            user_id="usr_123",
+            user_email="attacker@evil.com",
+            datadog_session_id="sess_abc",
+            resource_type=ResourceType.LOAN_APPLICATION,
+            resource_id="loan_456",
+            resource_owner_id="owner_789",
+            client_ip="192.168.1.100",
+            http_method="GET",
+            request_path="/consumer/loan_applications/456/offers",
+            failure_type=FailureType.AUTHZ_OWNERSHIP_DENIED,
+        )
+        
+        # Create detection event
+        event = IDORDetectionEvent(
+            event_id="test_event_001",
+            user_id="usr_123",
+            session_id="sess_abc",
+            severity=AccessAttemptResult.CRITICAL_IDOR_ATTACK,
+            distinct_resources_accessed=3,
+            is_sequential=True,
+            time_window_seconds=45,
+            failed_resources=["loan_456", "loan_457", "loan_458"],
+            resource_owners=["owner_789", "owner_790", "owner_791"],
+            telemetry_snapshot=telemetry,
+        )
+        
+        # Scrub PII
+        scrubbed = scrub_telemetry_for_llm(event, telemetry)
+        
+        # Convert to string for easy checking
+        scrubbed_str = str(scrubbed)
+        
+        # PII should be redacted
+        assert "[EMAIL_REDACTED]" in scrubbed_str
+        assert "[IP_REDACTED]" in scrubbed_str
+        assert "attacker@evil.com" not in scrubbed_str
+        assert "192.168.1.100" not in scrubbed_str
+        
+        # Tokens should be preserved
+        assert scrubbed["telemetry_context"]["user_id"] == "usr_123"
+        assert scrubbed["telemetry_context"]["datadog_session_id"] == "sess_abc"
+        assert scrubbed["telemetry_context"]["resource_id"] == "loan_456"
+        assert scrubbed["telemetry_context"]["resource_owner_id"] == "owner_789"
+    
+    def test_scrub_event_for_soar(self):
+        """Verify event scrubbing for SOAR transmission"""
+        from core.telemetry_scrubber import scrub_event_for_soar
+        from core.schema.web_telemetry import IDORDetectionEvent
+        
+        # Create event with PII in telemetry snapshot
+        telemetry = WebTelemetryMetadata(
+            user_id="usr_456",
+            user_email="victim@company.com",
+            datadog_session_id="sess_xyz",
+            resource_type=ResourceType.LOAN_APPLICATION,
+            resource_id="loan_999",
+            resource_owner_id="owner_456",
+            client_ip="10.0.0.50",
+            http_method="GET",
+            request_path="/consumer/loan_applications/999/offers",
+            failure_type=FailureType.AUTHZ_OWNERSHIP_DENIED,
+        )
+        
+        event = IDORDetectionEvent(
+            event_id="test_event_002",
+            user_id="usr_456",
+            session_id="sess_xyz",
+            severity=AccessAttemptResult.ALERT_MEDIUM,
+            distinct_resources_accessed=3,
+            is_sequential=False,
+            time_window_seconds=120,
+            failed_resources=["loan_999", "loan_888", "loan_777"],
+            resource_owners=["owner_456", "owner_457", "owner_458"],
+            telemetry_snapshot=telemetry,
+        )
+        
+        # Scrub event for SOAR
+        scrubbed_event = scrub_event_for_soar(event)
+        
+        # Original event should be unchanged
+        assert event.telemetry_snapshot.user_email == "victim@company.com"
+        assert event.telemetry_snapshot.client_ip == "10.0.0.50"
+        
+        # Scrubbed event should have PII redacted
+        assert scrubbed_event.telemetry_snapshot.user_email == "[EMAIL_REDACTED]"
+        assert scrubbed_event.telemetry_snapshot.client_ip == "[IP_REDACTED]"
+        
+        # Tokens should be preserved
+        assert scrubbed_event.telemetry_snapshot.user_id == "usr_456"
+        assert scrubbed_event.telemetry_snapshot.datadog_session_id == "sess_xyz"
+        assert scrubbed_event.telemetry_snapshot.resource_id == "loan_999"
+        
+        # Other event fields should be unchanged
+        assert scrubbed_event.event_id == event.event_id
+        assert scrubbed_event.severity == event.severity
+        assert scrubbed_event.distinct_resources_accessed == event.distinct_resources_accessed
+    
+    def test_soar_pii_scrubbing_option(self):
+        """Verify SOAR integration respects scrub_pii_for_soar parameter"""
+        from core.soar_integration import SOARIntegration
+        from core.schema.web_telemetry import IDORDetectionEvent
+        import os
+        
+        # Create event with PII
+        telemetry = WebTelemetryMetadata(
+            user_id="usr_test",
+            user_email="test@example.com",
+            datadog_session_id="sess_test",
+            resource_type=ResourceType.LOAN_APPLICATION,
+            resource_id="loan_123",
+            resource_owner_id="owner_test",
+            client_ip="203.0.113.42",
+            http_method="GET",
+            request_path="/consumer/loan_applications/123/offers",
+            failure_type=FailureType.AUTHZ_OWNERSHIP_DENIED,
+        )
+        
+        event = IDORDetectionEvent(
+            event_id="test_event_003",
+            user_id="usr_test",
+            session_id="sess_test",
+            severity=AccessAttemptResult.CRITICAL_IDOR_ATTACK,
+            distinct_resources_accessed=3,
+            is_sequential=True,
+            time_window_seconds=30,
+            failed_resources=["loan_123", "loan_124", "loan_125"],
+            resource_owners=["owner_test", "owner_test2", "owner_test3"],
+            telemetry_snapshot=telemetry,
+        )
+        
+        # Test scrubbing enabled explicitly
+        soar = SOARIntegration(webhook_url="https://test.example.com/webhook")
+        
+        # Mock the _format_payload to capture the event
+        original_format = soar._format_payload
+        captured_event = None
+        
+        def mock_format(evt, auto_hold):
+            nonlocal captured_event
+            captured_event = evt
+            return original_format(evt, auto_hold)
+        
+        soar._format_payload = mock_format
+        
+        # Mock the actual HTTP request
+        with patch.object(soar, '_send_request', new_callable=AsyncMock) as mock_send:
+            mock_send.return_value = {"incident_id": "INC-123"}
+            
+            # Call with scrubbing enabled
+            import asyncio
+            result = asyncio.run(soar.send_alert(event, scrub_pii_for_soar=True))
+        
+        # Verify PII was scrubbed in the event passed to format
+        assert captured_event.telemetry_snapshot.user_email == "[EMAIL_REDACTED]"
+        assert captured_event.telemetry_snapshot.client_ip == "[IP_REDACTED]"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
