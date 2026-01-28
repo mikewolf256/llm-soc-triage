@@ -226,10 +226,11 @@ flowchart LR
     LLM --> Cases
     LLM --> Annot
     
-    style Webhook fill:#fca5a5
-    style Context fill:#fde047
-    style Cases fill:#86efac
-    style Annot fill:#86efac
+    style Webhook fill:#fca5a5,stroke:#dc2626,stroke-width:3px,color:#000
+    style Context fill:#fde047,stroke:#ca8a04,stroke-width:3px,color:#000
+    style Cases fill:#86efac,stroke:#16a34a,stroke-width:3px,color:#000
+    style Annot fill:#86efac,stroke:#16a34a,stroke-width:3px,color:#000
+    style LLM fill:#f1f5f9,stroke:#64748b,stroke-width:3px,stroke-dasharray:5 5,color:#000
 ```
 
 ### Context Enrichment Examples

@@ -54,10 +54,10 @@ flowchart TB
     Val2 --> Scrub2
     Scrub2 --> Cases
     
-    style InboundGate fill:#fca5a5
-    style ExecutionGate fill:#fde047
-    style OutboundGate fill:#86efac
-    style LLM fill:#f1f5f9,stroke-dasharray:5 5
+    style InboundGate fill:#fca5a5,stroke:#dc2626,stroke-width:3px
+    style ExecutionGate fill:#fde047,stroke:#ca8a04,stroke-width:3px
+    style OutboundGate fill:#86efac,stroke:#16a34a,stroke-width:3px
+    style LLM fill:#f1f5f9,stroke:#64748b,stroke-width:3px,stroke-dasharray:5 5
 ```
 
 ### PII Data Flow and Scrubbing Points
