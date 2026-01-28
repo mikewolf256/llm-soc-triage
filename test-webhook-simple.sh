@@ -45,13 +45,43 @@ echo ""
 
 SIGNATURE=$(cat /tmp/chronicle_signature.txt)
 
-curl -X POST http://localhost:8000/v1/chronicle/webhook \
+HTTP_STATUS=$(curl -X POST http://localhost:8000/v1/chronicle/webhook \
   -H "Content-Type: application/json" \
   -H "X-Chronicle-Signature: $SIGNATURE" \
   -H "X-API-Key: test_api_key" \
   --data-binary '@/tmp/chronicle_test_alert.json' \
-  -w "\n\nStatus: %{http_code}\n" \
-  -s | python3 -m json.tool
+  -w "%{http_code}" \
+  -s \
+  -o /tmp/simple_response.txt)
+
+python3 << 'PARSE_SCRIPT'
+import sys
+import json
+
+try:
+    with open('/tmp/simple_response.txt', 'r') as f:
+        data = json.load(f)
+    
+    print(json.dumps(data, indent=2))
+    
+    if data.get('success'):
+        print(f"\n✓ Success! Triage: {data.get('triage_result')} (confidence: {data.get('confidence')})")
+    else:
+        print(f"\n✗ Failed: {data.get('error')}")
+except FileNotFoundError:
+    print("✗ Response file not found")
+except json.JSONDecodeError as e:
+    print(f"✗ Invalid JSON response: {e}")
+    with open('/tmp/simple_response.txt', 'r') as f:
+        body = f.read()
+    print(f"Raw response: {body[:500]}")
+except Exception as e:
+    print(f"✗ Error: {e}")
+PARSE_SCRIPT
+
+echo ""
+echo "Status: $HTTP_STATUS"
+PARSE_SCRIPT
 
 echo ""
 echo "=========================================="

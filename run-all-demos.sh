@@ -59,22 +59,23 @@ EOF
     SIG=$(cat /tmp/sig_$scenario_id.txt)
     
     # Send webhook
-    RESPONSE=$(curl -X POST http://localhost:8000/v1/chronicle/webhook \
+    curl -X POST http://localhost:8000/v1/chronicle/webhook \
       -H "Content-Type: application/json" \
       -H "X-Chronicle-Signature: sha256=$SIG" \
       -H "X-API-Key: test_api_key" \
       --data-binary "@/tmp/test_alert_$scenario_id.json" \
-      -s 2>&1)
+      -s \
+      -o /tmp/response_$scenario_id.txt
     
     # Parse response
-    echo "$RESPONSE" | python3 << 'PARSE'
+    python3 << PARSE
 import json
-import sys
 
-response = sys.stdin.read()
+scenario_id = "$scenario_id"
 
 try:
-    data = json.loads(response)
+    with open(f'/tmp/response_{scenario_id}.txt', 'r') as f:
+        data = json.load(f)
     
     if data.get('success'):
         print(f"✓ SUCCESS")
@@ -88,9 +89,15 @@ try:
             error = error[:100] + "..."
         print(f"✗ FAILED")
         print(f"  Error: {error}")
-except Exception as e:
+except FileNotFoundError:
+    print(f"✗ Response file not found")
+except json.JSONDecodeError as e:
     print(f"✗ Parse error: {e}")
+    with open(f'/tmp/response_{scenario_id}.txt', 'r') as f:
+        response = f.read()
     print(f"  Raw response (first 150 chars): {response[:150]}")
+except Exception as e:
+    print(f"✗ Unexpected error: {e}")
 PARSE
     
     echo ""

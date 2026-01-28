@@ -51,8 +51,8 @@ app = FastAPI(
     title="AI-Assisted SOC Triage Engine",
     description="RAG-driven security alert triage with privacy-first design",
     version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 # Initialize Anthropic client (lazy loaded for better error handling)
@@ -246,9 +246,9 @@ async def health_check():
 
 @app.post("/v1/chronicle/webhook", response_model=ChronicleWebhookResponse)
 async def chronicle_alert_webhook(
-    alert: ChronicleUDMAlert,
     request: Request,
-    x_chronicle_signature: str = Header(None, alias="X-Chronicle-Signature")
+    x_chronicle_signature: str = Header(None, alias="X-Chronicle-Signature"),
+    x_api_key: str = Header(None, alias="X-API-Key")
 ):
     """
     Receive Chronicle YARA-L triggered alerts for LLM triage.
@@ -273,23 +273,18 @@ async def chronicle_alert_webhook(
         Chronicle YARA-L → Webhook → Signature Verify → PII Scrub → Context → LLM → SOAR
     """
     start_time = datetime.utcnow()
-    alert_id = f"chronicle_{alert.rule_id}_{alert.detection_timestamp.isoformat()}"
     
     try:
-        logger.info(f"[CHRONICLE_WEBHOOK] rule={alert.rule_name} severity={alert.severity}")
+        # Step 1: Get raw request body for signature verification
+        # CRITICAL: Must verify signature BEFORE parsing JSON to avoid formatting mismatches
+        body = await request.body()
         
-        # Step 1: Validate webhook signature (prevent spoofing)
+        # Step 2: Validate webhook signature (prevent spoofing)
         handler = get_chronicle_alert_handler()
         
-        # Note: For signature verification in production, compute signature on parsed alert
-        # In demo mode, skip strict signature validation or use Chronicle's IP allowlist
         if x_chronicle_signature and handler.webhook_secret:
-            # Reconstruct JSON from parsed alert for signature verification
-            alert_json = alert.model_dump_json()
-            body = alert_json.encode('utf-8')
-            
             if not handler.verify_signature(body, x_chronicle_signature):
-                logger.warning(f"[CHRONICLE_WEBHOOK] Invalid signature for rule={alert.rule_name}")
+                logger.warning(f"[CHRONICLE_WEBHOOK] Invalid signature")
                 logger.debug(f"[CHRONICLE_WEBHOOK] Received signature: {x_chronicle_signature}")
                 # In demo mode, log warning but continue
                 logger.info("[CHRONICLE_WEBHOOK] Continuing in demo mode (signature mismatch logged)")
@@ -298,12 +293,20 @@ async def chronicle_alert_webhook(
                 #     detail="Invalid Chronicle webhook signature"
                 # )
         
-        # Step 2: CRITICAL - Scrub PII from raw UDM events
+        # Step 3: Parse the alert from raw body
+        import json
+        alert_dict = json.loads(body.decode('utf-8'))
+        alert = ChronicleUDMAlert(**alert_dict)
+        
+        alert_id = f"chronicle_{alert.rule_id}_{alert.detection_timestamp.isoformat()}"
+        logger.info(f"[CHRONICLE_WEBHOOK] rule={alert.rule_name} severity={alert.severity}")
+        
+        # Step 4: CRITICAL - Scrub PII from raw UDM events
         # This is the INBOUND GATE (Red) - PII must not reach LLM
         logger.debug(f"[CHRONICLE_WEBHOOK] Scrubbing PII from {len(alert.udm_events)} UDM events")
         scrubbed_udm_data = handler.scrub_webhook_alert(alert.model_dump())
         
-        # Step 3: Convert Chronicle alert to standard AlertRequest schema
+        # Step 5: Convert Chronicle alert to standard AlertRequest schema
         standard_alert = AlertRequest(
             alert_id=alert_id,
             severity=alert.severity.value,
@@ -328,13 +331,13 @@ async def chronicle_alert_webhook(
             iocs=[]  # Extract IOCs from UDM events if needed
         )
         
-        # Step 4: Execute standard triage flow (with Chronicle context enrichment)
+        # Step 6: Execute standard triage flow (with Chronicle context enrichment)
         logger.info(f"[CHRONICLE_WEBHOOK] Executing triage for {alert_id}")
         
         # Use internal triage function (bypasses API key check)
         triage_result = await triage_alert_internal(standard_alert)
         
-        # Step 5: Return response to Chronicle
+        # Step 7: Return response to Chronicle
         duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
         
         return ChronicleWebhookResponse(
