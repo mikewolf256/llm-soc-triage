@@ -44,7 +44,7 @@ class AlertRequest(BaseModel):
     source: str = Field(..., description="Alert source system (e.g., crowdstrike, splunk)")
     title: str = Field(..., description="Short alert title")
     description: str = Field(..., description="Detailed alert description")
-    timestamp: datetime = Field(..., description="When the alert was generated")
+    timestamp: str = Field(..., description="When the alert was generated (ISO format string)")
     
     # Optional fields for enrichment
     affected_user: Optional[str] = Field(None, description="Username or email")
