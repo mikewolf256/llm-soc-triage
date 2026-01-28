@@ -9,6 +9,10 @@ httpx==0.25.2
 presidio-analyzer==2.2.33
 presidio-anonymizer==2.2.33
 
+# IDOR Detection - Session Tracking & Caching
+redis==5.0.1
+fakeredis==2.21.0  # In-memory Redis mock for dev/testing
+
 # Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
