@@ -111,13 +111,13 @@ GET /loan_applications/123456 → 403
 
 | Scenario | Traditional Detection (FP Rate) | Ownership-Aware Detection (FP Rate) |
 |----------|--------------------------------|-------------------------------------|
-| **Multi-loan user accessing own 10 loans** | ❌ 3+ sequential IDs → ALERT (100% FP) | ✅ User owns all 10 → NO ALERT (0% FP) |
-| **User bookmarks old own loan URL** | ❌ Retry same ID 10x → LOG (noise) | ✅ Own loan retry → LOG (not tracked) |
-| **User legitimately has 15+ loans** | ❌ Many accessed → ALERT (100% FP) | ✅ All owned → NO ALERT (0% FP) |
-| **QA tester validating test data** | ❌ Test loans → ALERT (requires whitelist) | ✅ QA owns test loans → NO ALERT (auto) |
-| **IDOR attack on neighbors** | ✅ 3+ sequential → ALERT | ✅ 3+ OTHER-user → ALERT |
-| **Mobile app pagination (own data)** | ⚠️ Sequential API calls → ALERT (50% FP) | ✅ User owns paginated data → NO ALERT |
-| **Recent deployment bug (widespread 403s)** | ❌ Widespread → Alert Storm | 🤖 LLM: "Deployment 2h ago, known bug" |
+| **Multi-loan user accessing own 10 loans** | [FP] 3+ sequential IDs → ALERT (100% FP) | [OK] User owns all 10 → NO ALERT (0% FP) |
+| **User bookmarks old own loan URL** | [FP] Retry same ID 10x → LOG (noise) | [OK] Own loan retry → LOG (not tracked) |
+| **User legitimately has 15+ loans** | [FP] Many accessed → ALERT (100% FP) | [OK] All owned → NO ALERT (0% FP) |
+| **QA tester validating test data** | [FP] Test loans → ALERT (requires whitelist) | [OK] QA owns test loans → NO ALERT (auto) |
+| **IDOR attack on neighbors** | [DETECTED] 3+ sequential → ALERT | [DETECTED] 3+ OTHER-user → ALERT |
+| **Mobile app pagination (own data)** | [FP] Sequential API calls → ALERT (50% FP) | [OK] User owns paginated data → NO ALERT |
+| **Recent deployment bug (widespread 403s)** | [FP] Widespread → Alert Storm | [LLM] "Deployment 2h ago, known bug" |
 
 **Result**: 90% reduction in false positives while maintaining zero false negatives on real attacks.
 
