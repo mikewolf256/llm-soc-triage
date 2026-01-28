@@ -124,10 +124,10 @@ Business context rules in `data/business_context.json`:
   "qa_infrastructure": {
     "test_user_ids": ["qa_automation", "user_qa_"],
     "test_display_names": ["QA Automation Bot"],
-    "test_product_names": ["Caribou QA Test Suite"]
+    "test_product_names": ["Elk QA Test Suite"]
   },
   "insider_threat_indicators": {
-    "employee_hostnames": ["caribou-laptop", ".corp.caribou.com"],
+    "employee_hostnames": ["elk-laptop", ".corp.elk.com"],
     "suspicious_patterns": ["outside assigned portfolio"]
   }
 }
@@ -434,7 +434,7 @@ Traditional PII scrubbers create a false choice: **protect privacy OR preserve c
 **The Problem with Naive Scrubbing:**
 ```json
 {
-  "user": "john.doe@caribou.com",
+  "user": "john.doe@elk.com",
   "attempted_access": ["loan_12345", "loan_12346", "loan_12347"],
   "source_ip": "192.168.1.100"
 }
@@ -558,7 +558,7 @@ US_PASSPORT:     r'\b[A-Z]{1,2}\d{6,9}\b'
 // RAW CrowdStrike Alert
 {
   "severity": "critical",
-  "user": "sarah.johnson@caribou.com",
+  "user": "sarah.johnson@elk.com",
   "host": "WIN-PROD-01",
   "process": "powershell.exe -enc <base64>",
   "parent_process": "C:\\Users\\sarah.johnson\\Desktop\\invoice.exe",
@@ -613,9 +613,9 @@ US_PASSPORT:     r'\b[A-Z]{1,2}\d{6,9}\b'
   "source_ip": "103.45.67.89",
   "geo": {"city": "Lagos", "country": "NG"},
   "attempted_loans": [
-    {"id": "loan_12345", "owner_id": "usr_b9e4d3c2", "owner_email": "victim1@caribou.com"},
-    {"id": "loan_12346", "owner_id": "usr_c0f5e4d3", "owner_email": "victim2@caribou.com"},
-    {"id": "loan_12347", "owner_id": "usr_d1g6f5e4", "owner_email": "victim3@caribou.com"}
+    {"id": "loan_12345", "owner_id": "usr_b9e4d3c2", "owner_email": "victim1@elk.com"},
+    {"id": "loan_12346", "owner_id": "usr_c0f5e4d3", "owner_email": "victim2@elk.com"},
+    {"id": "loan_12347", "owner_id": "usr_d1g6f5e4", "owner_email": "victim3@elk.com"}
   ],
   "failure_count": 3,
   "time_window": "45 seconds",
@@ -799,27 +799,6 @@ scrubber.presidio_entities = [
 - Trust: Legal/Security approve production deployment
 - Quality: LLM analysis remains highly accurate
 
-**Metrics from Production Use**:
-- **10,000+ alerts scrubbed daily** across EDR + Web telemetry
-- **Zero PII leaks** in 6 months of production operation
-- **<5ms average overhead** per alert (Regex mode)
-- **15ms average overhead** per alert (Presidio mode)
-- **95%+ LLM accuracy maintained** despite scrubbing
-
----
-
-### Why This Matters for Caribou HM
-
-**Technical Sophistication**:
-- Shows deep understanding of privacy vs. utility tradeoff
-- Demonstrates production-grade error handling (dual-mode)
-- Proves systems thinking (not just feature addition)
-
-**Business Acumen**:
-- Enables AI/LLM adoption while maintaining compliance
-- Reduces legal/security review cycles for new features
-- Protects company from massive regulatory fines
-
 ---
 
 ### Design Philosophy: Context-Preserving Privacy
@@ -944,7 +923,7 @@ Traditional security tools generate logs that require manual correlation and ana
 | Traditional Log (Silent) | llm-soc-triage Output (Actionable) |
 |--------------------------|-----------------------------------|
 | `403 Forbidden: /api/v1/loan/1005` | **Alert**: Potential Loan Enumeration Attack |
-| `User: john.doe@email.com` | **Context**: Session `x-caribou-329` attempted 5 distinct Loan IDs in 60s |
+| `User: john.doe@email.com` | **Context**: Session `x-elk-329` attempted 5 distinct Loan IDs in 60s |
 | `Context: None` | **Risk**: High Intent. Frontend RUM confirms manual sequential navigation |
 | `Action: None` | **Action**: Auto-hold triggered, SOAR incident created, MITRE: TA0009/T1213.002 |
 
