@@ -8,11 +8,19 @@ In fintech environments, raw alerts without business context are useless.
 - WHAT they executed (approved admin tool vs unknown binary)
 
 This module enriches alerts with institutional knowledge before LLM triage.
+
+Chronicle Integration:
+    When enabled, adds Chronicle-backed enrichment (prevalence, baselines, network intel).
+    All Chronicle API responses are PII-scrubbed before LLM context injection.
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BusinessContextManager:
@@ -22,14 +30,23 @@ class BusinessContextManager:
     This is the "secret sauce" that makes AI triage valuable in production.
     Without this, every PowerShell execution looks equally suspicious.
     With this, we know that svc_accounting running scripts is expected.
+    
+    Chronicle Integration:
+        When enabled, adds Chronicle-backed enrichment in parallel with
+        local business rules. All Chronicle data is PII-scrubbed.
     """
     
-    def __init__(self, context_file: Optional[str] = None):
+    def __init__(
+        self,
+        context_file: Optional[str] = None,
+        enable_chronicle: bool = None,
+    ):
         """
         Initialize with business context data
         
         Args:
             context_file: Path to business_context.json. Defaults to data/business_context.json
+            enable_chronicle: Enable Chronicle enrichment (default: from env CHRONICLE_CONTEXT_ENRICHMENT)
         """
         if context_file is None:
             # Default to data/business_context.json relative to project root
@@ -37,6 +54,25 @@ class BusinessContextManager:
         
         self.context_file = Path(context_file)
         self.context = self._load_context()
+        
+        # Chronicle integration (lazy loaded)
+        self.chronicle_enabled = enable_chronicle if enable_chronicle is not None \
+                                else os.getenv("CHRONICLE_CONTEXT_ENRICHMENT", "false").lower() == "true"
+        self.chronicle_enricher = None
+        
+        if self.chronicle_enabled:
+            try:
+                from .chronicle_integration import ChronicleClient, ChronicleContextEnricher
+                chronicle_client = ChronicleClient()
+                if chronicle_client.is_configured():
+                    self.chronicle_enricher = ChronicleContextEnricher(chronicle_client)
+                    logger.info("Chronicle context enrichment enabled")
+                else:
+                    logger.warning("Chronicle enabled but not configured")
+                    self.chronicle_enabled = False
+            except Exception as e:
+                logger.warning(f"Chronicle enrichment initialization failed: {e}")
+                self.chronicle_enabled = False
     
     def _load_context(self) -> Dict[str, Any]:
         """Load business context from JSON file"""
@@ -158,15 +194,20 @@ class BusinessContextManager:
         
         return multiplier
     
-    def enrich_alert(self, alert: Dict[str, Any]) -> Dict[str, Any]:
+    async def enrich_alert(self, alert: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Enrich alert with full business context
+        Enrich alert with full business context (including Chronicle).
         
         This is the main entry point - takes a raw alert and adds
         all relevant business intelligence before LLM processing.
         
-        Interview Point: "This is why AI triage works in production -
-        we inject institutional knowledge that the LLM can reason over."
+        Flow:
+            1. Local business rules (synchronous)
+            2. Chronicle context enrichment (async, if enabled)
+            3. Combine contexts with PII scrubbing maintained
+        
+        Security:
+            All Chronicle API responses are PII-scrubbed before inclusion.
         """
         enrichment = {
             "business_context": {}
@@ -210,6 +251,23 @@ class BusinessContextManager:
         # Add compliance requirements
         enrichment["business_context"]["compliance"] = self.context.get("compliance_requirements", {})
         
+        # Chronicle enrichment (async, PII-scrubbed)
+        if self.chronicle_enabled and self.chronicle_enricher:
+            try:
+                logger.debug(f"Querying Chronicle for additional context: alert_id={alert.get('alert_id')}")
+                chronicle_context = await self.chronicle_enricher.enrich_from_chronicle(
+                    alert_iocs=iocs,
+                    affected_host=affected_host,
+                    affected_user=affected_user,
+                )
+                
+                if chronicle_context:
+                    enrichment["chronicle_context"] = chronicle_context
+                    logger.info(f"Chronicle enrichment added: {len(chronicle_context)} categories")
+            except Exception as e:
+                logger.error(f"Chronicle enrichment failed: {e}", exc_info=True)
+                # Graceful degradation - continue without Chronicle context
+        
         return enrichment
 
 
@@ -219,35 +277,59 @@ def format_business_context_for_prompt(enrichment: Dict[str, Any]) -> str:
     
     This converts the enrichment dict into natural language that
     the LLM can reason over during triage.
+    
+    Includes both local business rules and Chronicle context (if available).
+    All data is pre-scrubbed for PII safety.
     """
-    if not enrichment.get("business_context"):
-        return "No additional business context available."
+    lines = []
     
-    context = enrichment["business_context"]
-    lines = ["### Business Context"]
+    # Local business context
+    if enrichment.get("business_context"):
+        context = enrichment["business_context"]
+        lines.append("### Business Context")
+        
+        if "critical_asset" in context:
+            asset = context["critical_asset"]
+            lines.append(f"- **Critical Asset Involved**: {asset['role']} (Risk Level: {asset['risk_level']})")
+            lines.append(f"  - Allowed users: {', '.join(asset['allowed_users'])}")
+        
+        if "vip_user" in context:
+            user = context["vip_user"]
+            lines.append(f"- **Privileged User**: {user['justification']}")
+            lines.append(f"  - Approved privileges: {', '.join(user['privileges'])}")
+        
+        if "approved_tool" in context:
+            tool = context["approved_tool"]
+            lines.append(f"- **Approved Admin Tool**: {tool['risk_notes']}")
+            lines.append(f"  - Allowed contexts: {', '.join(tool['allowed_contexts'])}")
+        
+        if "known_false_positive" in context:
+            fp = context["known_false_positive"]
+            lines.append(f"- **Known False Positive Pattern**: {fp['reason']}")
+            lines.append(f"  - Recommended action: {fp['recommended_action']}")
+            lines.append(f"  - Last reviewed: {fp['last_reviewed']}")
+        
+        if "risk_multiplier" in context and context["risk_multiplier"] > 1.0:
+            lines.append(f"- **Risk Multiplier**: {context['risk_multiplier']}x (high-risk indicators present)")
     
-    if "critical_asset" in context:
-        asset = context["critical_asset"]
-        lines.append(f"- **Critical Asset Involved**: {asset['role']} (Risk Level: {asset['risk_level']})")
-        lines.append(f"  - Allowed users: {', '.join(asset['allowed_users'])}")
+    # Chronicle context (if available)
+    if enrichment.get("chronicle_context"):
+        chronicle = enrichment["chronicle_context"]
+        lines.append("")  # Blank line separator
+        lines.append("### Chronicle Security Context")
+        
+        if "chronicle_prevalence" in chronicle and chronicle["chronicle_prevalence"]:
+            lines.append("\n**IOC Prevalence (Past 30 Days):**")
+            for ioc, context_text in chronicle["chronicle_prevalence"].items():
+                lines.append(f"- `{ioc}`: {context_text}")
+        
+        if "chronicle_user_baseline" in chronicle:
+            lines.append(f"\n**User Baseline:**")
+            lines.append(chronicle["chronicle_user_baseline"])
+        
+        if "chronicle_network_context" in chronicle and chronicle["chronicle_network_context"]:
+            lines.append("\n**Network Intelligence:**")
+            for ip, context_text in chronicle["chronicle_network_context"].items():
+                lines.append(f"- `{ip}`: {context_text}")
     
-    if "vip_user" in context:
-        user = context["vip_user"]
-        lines.append(f"- **Privileged User**: {user['justification']}")
-        lines.append(f"  - Approved privileges: {', '.join(user['privileges'])}")
-    
-    if "approved_tool" in context:
-        tool = context["approved_tool"]
-        lines.append(f"- **Approved Admin Tool**: {tool['risk_notes']}")
-        lines.append(f"  - Allowed contexts: {', '.join(tool['allowed_contexts'])}")
-    
-    if "known_false_positive" in context:
-        fp = context["known_false_positive"]
-        lines.append(f"- **Known False Positive Pattern**: {fp['reason']}")
-        lines.append(f"  - Recommended action: {fp['recommended_action']}")
-        lines.append(f"  - Last reviewed: {fp['last_reviewed']}")
-    
-    if "risk_multiplier" in context and context["risk_multiplier"] > 1.0:
-        lines.append(f"- **Risk Multiplier**: {context['risk_multiplier']}x (high-risk indicators present)")
-    
-    return "\n".join(lines)
+    return "\n".join(lines) if lines else "No additional business context available."

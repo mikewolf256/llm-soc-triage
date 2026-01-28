@@ -1,0 +1,235 @@
+/**
+ * Chronicle YARA-L Rule: IDOR Sequential Enumeration Detection
+ * 
+ * Copyright (c) 2026 Agentic Security Partners LLC. All Rights Reserved.
+ * 
+ * Description:
+ *   Detects potential IDOR (Insecure Direct Object Reference) enumeration attacks
+ *   by identifying multiple 403 Forbidden responses for sequential resource IDs
+ *   from the same user session.
+ * 
+ * Detection Logic:
+ *   - Looks for HTTP GET requests to loan application endpoints
+ *   - Identifies 403 Forbidden responses (authorization failures)
+ *   - Tracks distinct loan IDs accessed per session
+ *   - Triggers when 3+ distinct resources accessed in 5-minute window
+ * 
+ * Integration:
+ *   - Forwards detected patterns to llm-soc-triage middleware for stateful analysis
+ *   - Middleware performs ownership-aware detection (filters own-resource access)
+ *   - LLM provides context analysis and false positive reduction
+ * 
+ * MITRE ATT&CK:
+ *   - TA0009: Collection
+ *   - T1213: Data from Information Repositories
+ *   - T1213.002: Sharepoint/Web Applications
+ * 
+ * Author: Agentic Security Partners LLC
+ * Version: 1.0
+ * Date: 2026-01-27
+ */
+
+rule idor_sequential_enumeration_trigger {
+  
+  meta:
+    author = "Agentic Security Partners LLC"
+    description = "Detect potential IDOR enumeration and forward to llm-soc-triage middleware for ownership-aware analysis"
+    severity = "MEDIUM"
+    reference = "https://owasp.org/Top10/A01_2021-Broken_Access_Control/"
+    mitre_attack_tactic = "TA0009"  // Collection
+    mitre_attack_technique = "T1213"  // Data from Information Repositories
+    mitre_attack_subtechnique = "T1213.002"  // Sharepoint/Web Applications
+    version = "1.0"
+    date = "2026-01-27"
+  
+  events:
+    // Match HTTP GET requests with 403 responses to loan endpoints
+    $e.metadata.event_type = "HTTP_REQUEST"
+    $e.network.http.response_code = 403
+    $e.network.http.method = "GET"
+    $e.target.url matches /\/api\/v[12]\/consumer\/loan_applications\/\d+/
+    
+    // Extract session identifier (from cookies, headers, or custom fields)
+    // Adjust based on your application's session tracking
+    $e.network.http.request_headers.cookie matches /session_id=([a-zA-Z0-9\-]+)/
+    or $e.network.http.request_headers["x-caribou-id"] != ""
+    or $e.network.http.request_headers["x-datadog-session-id"] != ""
+  
+  match:
+    // Group by session identifier over 5-minute window
+    $session_id = $e.network.http.request_headers.cookie or 
+                  $e.network.http.request_headers["x-caribou-id"] or
+                  $e.network.http.request_headers["x-datadog-session-id"]
+    over 5m
+  
+  outcome:
+    // Calculate risk based on pattern characteristics
+    $risk_score = max(50)
+    
+    // Count distinct loan IDs accessed (key metric for IDOR)
+    $distinct_loan_ids = count_distinct($e.target.url)
+    
+    // Track total attempts
+    $total_attempts = count($e.target.url)
+    
+    // Extract user identifier if available
+    $user_id = $e.principal.user.user_id
+    
+    // Extract source IP for correlation
+    $source_ip = $e.principal.ip
+  
+  condition:
+    // Trigger when 3+ distinct loan IDs accessed
+    // This indicates enumeration rather than retrying same resource
+    $e and $distinct_loan_ids >= 3
+  
+  options:
+    // Forward to middleware for stateful ownership-aware analysis
+    webhook_url = "https://middleware.company.com/v1/chronicle/webhook"
+    webhook_method = "POST"
+    webhook_auth = "Bearer ${MIDDLEWARE_API_KEY}"
+    webhook_timeout = 30
+    
+    // Include full UDM event context for middleware
+    webhook_include_udm_events = true
+    
+    // Alert settings
+    alert_priority = "MEDIUM"
+    alert_create = true
+    
+    // Notification channels
+    // notify_email = "soc-team@company.com"
+    // notify_slack = "#security-alerts"
+}
+
+
+/**
+ * Chronicle YARA-L Rule: IDOR Non-Sequential Exploration
+ * 
+ * Detects manual IDOR probing with non-sequential resource IDs.
+ * Typically indicates attacker with valid credentials exploring access boundaries.
+ */
+
+rule idor_nonsequential_exploration {
+  
+  meta:
+    author = "Agentic Security Partners LLC"
+    description = "Detect manual IDOR exploration (non-sequential, valid credentials)"
+    severity = "MEDIUM"
+    mitre_attack_tactic = "TA0009,TA0006"  // Collection, Credential Access
+    mitre_attack_technique = "T1213,T1078.004"  // Data Repos, Cloud Accounts
+    version = "1.0"
+  
+  events:
+    // Same base criteria as sequential rule
+    $e.metadata.event_type = "HTTP_REQUEST"
+    $e.network.http.response_code = 403
+    $e.network.http.method = "GET"
+    $e.target.url matches /\/api\/v[12]\/consumer\/loan_applications\/\d+/
+  
+  match:
+    $session_id = $e.network.http.request_headers["x-caribou-id"]
+    over 10m  // Longer window for manual exploration
+  
+  outcome:
+    $risk_score = max(40)
+    $distinct_loan_ids = count_distinct($e.target.url)
+    $user_id = $e.principal.user.user_id
+  
+  condition:
+    // Lower threshold but longer window
+    // Catches slower, methodical probing
+    $e and $distinct_loan_ids >= 5
+  
+  options:
+    webhook_url = "https://middleware.company.com/v1/chronicle/webhook"
+    webhook_method = "POST"
+    webhook_auth = "Bearer ${MIDDLEWARE_API_KEY}"
+    webhook_include_udm_events = true
+    alert_priority = "MEDIUM"
+}
+
+
+/**
+ * Chronicle YARA-L Rule: IDOR High-Velocity Attack
+ * 
+ * Detects rapid-fire IDOR attempts indicating automated scanning tool.
+ */
+
+rule idor_high_velocity_attack {
+  
+  meta:
+    author = "Agentic Security Partners LLC"
+    description = "Detect high-velocity IDOR scanning (automated tools)"
+    severity = "HIGH"
+    mitre_attack_tactic = "TA0009"
+    mitre_attack_technique = "T1213.002"
+    version = "1.0"
+  
+  events:
+    $e.metadata.event_type = "HTTP_REQUEST"
+    $e.network.http.response_code = 403
+    $e.network.http.method = "GET"
+    $e.target.url matches /\/api\/v[12]\/consumer\/loan_applications\/\d+/
+  
+  match:
+    $session_id = $e.network.http.request_headers["x-caribou-id"]
+    over 1m  // Very tight window
+  
+  outcome:
+    $risk_score = max(75)
+    $distinct_loan_ids = count_distinct($e.target.url)
+    $total_attempts = count($e.target.url)
+    $attack_velocity = $total_attempts / 60  // Attempts per second
+  
+  condition:
+    // 10+ attempts in 60 seconds = automated
+    $e and $total_attempts >= 10
+  
+  options:
+    webhook_url = "https://middleware.company.com/v1/chronicle/webhook"
+    webhook_method = "POST"
+    webhook_auth = "Bearer ${MIDDLEWARE_API_KEY}"
+    webhook_include_udm_events = true
+    alert_priority = "HIGH"
+    
+    // Auto-escalate high-velocity attacks
+    alert_create = true
+    // notify_pagerduty = "security_oncall"
+}
+
+
+/**
+ * Deployment Instructions:
+ * ========================
+ * 
+ * 1. Update webhook_url with your middleware endpoint
+ * 2. Create MIDDLEWARE_API_KEY secret in Chronicle
+ * 3. Adjust URL regex pattern for your API endpoint structure
+ * 4. Customize session identifier extraction for your app
+ * 5. Test in Chronicle rule editor with historical data
+ * 6. Deploy to production with monitoring
+ * 
+ * Testing:
+ * --------
+ * Use Chronicle's rule testing interface:
+ * - Load sample UDM events with 403 responses
+ * - Verify distinct_loan_ids calculation
+ * - Confirm webhook triggers correctly
+ * - Check middleware receives proper UDM format
+ * 
+ * Tuning:
+ * -------
+ * Adjust thresholds based on your environment:
+ * - $distinct_loan_ids: Start at 3, increase if too noisy
+ * - Time windows: Adjust for your application's normal usage patterns
+ * - URL regex: Match your specific API endpoint structure
+ * 
+ * Monitoring:
+ * -----------
+ * Track these metrics:
+ * - Rule trigger rate (alerts per day)
+ * - False positive rate (from middleware feedback)
+ * - Detection coverage (known attacks vs. triggered)
+ * - Webhook delivery success rate
+ */

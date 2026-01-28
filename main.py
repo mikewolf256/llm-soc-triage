@@ -12,7 +12,7 @@ Architecture: This middleware sits between your SIEM/SOAR and analysts,
 providing instant triage recommendations backed by historical context.
 """
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.responses import JSONResponse
 import os
 from dotenv import load_dotenv
@@ -24,6 +24,8 @@ from core.schema import AlertRequest, TriageResponse
 from core.scrubber import scrub_pii
 from core.prompt_engine import build_triage_prompt, parse_triage_response
 from core.context_manager import BusinessContextManager, format_business_context_for_prompt
+from core.chronicle_integration import get_chronicle_client, get_chronicle_alert_handler
+from core.schema.chronicle_events import ChronicleUDMAlert, ChronicleWebhookResponse
 
 # Load environment variables
 load_dotenv()
@@ -130,10 +132,10 @@ async def triage_alert(
         scrubbed_alert = scrub_pii(alert)
         logger.debug(f"[PII_SCRUBBED] alert_id={alert.alert_id}")
         
-        # Step 2: Enrich with Business Context
+        # Step 2: Enrich with Business Context (now async for Chronicle support)
         # Interview Point: "This is the 'secret sauce' - we inject institutional
         # knowledge about critical assets, VIP users, and approved tools."
-        business_enrichment = business_context_mgr.enrich_alert(scrubbed_alert)
+        business_enrichment = await business_context_mgr.enrich_alert(scrubbed_alert)
         context_summary = format_business_context_for_prompt(business_enrichment)
         logger.debug(f"[BUSINESS_CONTEXT] alert_id={alert.alert_id} enriched={bool(business_enrichment.get('business_context'))}")
         
@@ -228,6 +230,182 @@ async def health_check():
         health_status["issues"] = ["ANTHROPIC_API_KEY not configured"]
     
     return health_status
+
+
+@app.post("/v1/chronicle/webhook", response_model=ChronicleWebhookResponse)
+async def chronicle_alert_webhook(
+    alert: ChronicleUDMAlert,
+    request: Request,
+    x_chronicle_signature: str = Header(None, alias="X-Chronicle-Signature")
+):
+    """
+    Receive Chronicle YARA-L triggered alerts for LLM triage.
+    
+    Security Flow (Sandwich Model - Inbound Gate):
+        1. Validate Chronicle webhook signature (prevent spoofing)
+        2. Parse UDM alert structure
+        3. CRITICAL: Scrub PII before LLM processing
+        4. Convert to standard AlertRequest schema
+        5. Execute standard triage flow with Chronicle context
+    
+    Chronicle Integration:
+        - Inbound: YARA-L rules detect patterns and forward UDM events
+        - Context: Enrichment with prevalence/baseline data
+        - Outbound: Auto-create Chronicle cases for high-confidence alerts
+    
+    PII Security:
+        UDM events contain raw logs with IPs, emails, hostnames, usernames.
+        ALL data is scrubbed before LLM analysis per "Sandwich Model".
+    
+    Flow:
+        Chronicle YARA-L → Webhook → Signature Verify → PII Scrub → Context → LLM → SOAR
+    """
+    start_time = datetime.utcnow()
+    alert_id = f"chronicle_{alert.rule_id}_{alert.detection_timestamp.isoformat()}"
+    
+    try:
+        logger.info(f"[CHRONICLE_WEBHOOK] rule={alert.rule_name} severity={alert.severity}")
+        
+        # Step 1: Validate webhook signature (prevent spoofing)
+        handler = get_chronicle_alert_handler()
+        body = await request.body()
+        
+        if x_chronicle_signature and not handler.verify_signature(body, x_chronicle_signature):
+            logger.warning(f"[CHRONICLE_WEBHOOK] Invalid signature for rule={alert.rule_name}")
+            raise HTTPException(
+                status_code=403,
+                detail="Invalid Chronicle webhook signature"
+            )
+        
+        # Step 2: CRITICAL - Scrub PII from raw UDM events
+        # This is the INBOUND GATE (Red) - PII must not reach LLM
+        logger.debug(f"[CHRONICLE_WEBHOOK] Scrubbing PII from {len(alert.udm_events)} UDM events")
+        scrubbed_udm_data = handler.scrub_webhook_alert(alert.model_dump())
+        
+        # Step 3: Convert Chronicle alert to standard AlertRequest schema
+        standard_alert = AlertRequest(
+            alert_id=alert_id,
+            severity=alert.severity.value,
+            source="chronicle",
+            title=f"Chronicle: {alert.rule_name}",
+            description=f"Chronicle YARA-L rule '{alert.rule_name}' triggered. "
+                       f"Detected {alert.distinct_resources or len(alert.udm_events)} "
+                       f"matching events.",
+            timestamp=alert.detection_timestamp.isoformat(),
+            affected_host=None,  # Extract from UDM if available
+            affected_user=scrubbed_udm_data.get("user_id"),  # Already scrubbed
+            raw_data={
+                "chronicle_rule_id": alert.rule_id,
+                "chronicle_rule_version": alert.rule_version,
+                "chronicle_risk_score": alert.risk_score,
+                "udm_event_count": len(alert.udm_events),
+                "distinct_resources": alert.distinct_resources,
+                "session_id": alert.session_id,
+                # Store scrubbed UDM samples (limit to 3 for context)
+                "udm_sample_events": scrubbed_udm_data.get("udm_events", [])[:3],
+            },
+            iocs=[]  # Extract IOCs from UDM events if needed
+        )
+        
+        # Step 4: Execute standard triage flow (with Chronicle context enrichment)
+        logger.info(f"[CHRONICLE_WEBHOOK] Executing triage for {alert_id}")
+        
+        # Use internal triage function (bypasses API key check)
+        triage_result = await triage_alert_internal(standard_alert)
+        
+        # Step 5: Return response to Chronicle
+        duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        
+        return ChronicleWebhookResponse(
+            success=True,
+            alert_id=alert_id,
+            triage_result=triage_result.triage_result,
+            confidence=triage_result.confidence,
+            case_created=False,  # TODO: Implement auto-case creation
+            processing_time_ms=duration_ms,
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[CHRONICLE_WEBHOOK] Processing failed: {e}", exc_info=True)
+        duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        
+        return ChronicleWebhookResponse(
+            success=False,
+            alert_id=alert_id,
+            error=str(e),
+            processing_time_ms=duration_ms,
+        )
+
+
+async def triage_alert_internal(alert: AlertRequest) -> TriageResponse:
+    """
+    Internal triage function (used by Chronicle webhook and other integrations).
+    
+    Bypasses API key authentication for internal service-to-service calls.
+    Follows same security flow as main /v1/triage endpoint.
+    """
+    start_time = datetime.utcnow()
+    
+    try:
+        logger.info(f"[TRIAGE_INTERNAL] alert_id={alert.alert_id} source={alert.source}")
+        
+        # Step 1: Local PII Scrubbing (COMPLIANCE CRITICAL)
+        scrubbed_alert = scrub_pii(alert)
+        logger.debug(f"[PII_SCRUBBED] alert_id={alert.alert_id}")
+        
+        # Step 2: Enrich with Business Context (now async for Chronicle support)
+        business_enrichment = await business_context_mgr.enrich_alert(scrubbed_alert)
+        context_summary = format_business_context_for_prompt(business_enrichment)
+        logger.debug(f"[BUSINESS_CONTEXT] alert_id={alert.alert_id}")
+        
+        # Step 3: RAG - Retrieve Historical Context
+        historical_context = retrieve_historical_context(alert)
+        logger.debug(f"[RAG_RETRIEVED] alert_id={alert.alert_id}")
+        
+        # Step 4: Build Secure Prompt with XML Delimiters
+        prompt = build_triage_prompt(scrubbed_alert, business_context=context_summary)
+        logger.debug(f"[PROMPT_BUILT] alert_id={alert.alert_id}")
+        
+        # Step 5: Structured LLM Call
+        client = get_llm_client()
+        message = client.messages.create(
+            model=os.getenv("MODEL_NAME", "claude-3-5-sonnet-20241022"),
+            max_tokens=int(os.getenv("MAX_TOKENS", "4096")),
+            temperature=float(os.getenv("TEMPERATURE", "0.0")),
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        # Step 6: Parse XML Response
+        response_text = message.content[0].text
+        parsed_response = parse_triage_response(response_text)
+        
+        # Step 7: Build Response
+        base_risk = parsed_response.get("risk_score", 50)
+        risk_multiplier = business_enrichment.get("business_context", {}).get("risk_multiplier", 1.0)
+        adjusted_risk = min(100, int(base_risk * risk_multiplier))
+        
+        triage_response = TriageResponse(
+            alert_id=alert.alert_id,
+            triage_result=parsed_response.get("triage_result", "NEEDS_INVESTIGATION"),
+            confidence=parsed_response.get("confidence", 0.0),
+            risk_score=adjusted_risk,
+            reasoning=parsed_response.get("reasoning", response_text),
+            next_actions=parsed_response.get("next_actions", []),
+            iocs=parsed_response.get("iocs", []),
+            model_used=os.getenv("MODEL_NAME", "claude-3-5-sonnet-20241022"),
+            business_context_applied=bool(business_enrichment.get("business_context"))
+        )
+        
+        duration_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+        logger.info(f"[TRIAGE_COMPLETE] alert_id={alert.alert_id} result={triage_response.triage_result} duration_ms={duration_ms:.0f}")
+        
+        return triage_response
+    
+    except Exception as e:
+        logger.error(f"[TRIAGE_ERROR] alert_id={alert.alert_id} error={str(e)}", exc_info=True)
+        raise
 
 
 if __name__ == "__main__":

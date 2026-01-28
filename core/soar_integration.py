@@ -23,12 +23,14 @@ Configuration:
 import httpx
 import logging
 import os
+import asyncio
 from typing import Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
 
 from .schema.web_telemetry import IDORDetectionEvent, AccessAttemptResult
 from .telemetry_scrubber import scrub_event_for_soar
+from .schema.chronicle_events import ChronicleCaseRequest, ChronicleUDMAnnotation, ChronicleSeverity
 
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,7 @@ class SOARPlatform(str, Enum):
     XSOAR = "xsoar"  # Palo Alto Cortex XSOAR
     RESILIENT = "resilient"  # IBM Resilient
     SERVICENOW = "servicenow"  # ServiceNow SecOps
+    CHRONICLE = "chronicle"  # Google Chronicle SOAR
 
 
 class SOARIntegration:
@@ -89,15 +92,32 @@ class SOARIntegration:
         self.timeout = timeout
         self.retry_attempts = retry_attempts
         
-        if not self.webhook_url:
+        # Chronicle integration (lazy loaded)
+        self.chronicle_client = None
+        self.chronicle_enabled = os.getenv("CHRONICLE_SOAR_INTEGRATION", "false").lower() == "true"
+        
+        if self.chronicle_enabled:
+            try:
+                from .chronicle_integration import get_chronicle_client
+                self.chronicle_client = get_chronicle_client()
+                if self.chronicle_client.is_configured():
+                    logger.info("Chronicle SOAR integration enabled")
+                else:
+                    logger.warning("Chronicle SOAR enabled but not configured")
+                    self.chronicle_enabled = False
+            except Exception as e:
+                logger.warning(f"Chronicle SOAR initialization failed: {e}")
+                self.chronicle_enabled = False
+        
+        if not self.webhook_url and not self.chronicle_enabled:
             logger.warning(
-                "SOAR webhook URL not configured. "
-                "Set SOAR_WEBHOOK_URL environment variable."
+                "SOAR integration not configured. "
+                "Set SOAR_WEBHOOK_URL or enable Chronicle SOAR."
             )
     
     def is_configured(self) -> bool:
         """Check if SOAR integration is properly configured."""
-        return bool(self.webhook_url)
+        return bool(self.webhook_url or self.chronicle_enabled)
     
     async def send_alert(
         self,
@@ -481,6 +501,244 @@ def get_soar_integration() -> SOARIntegration:
             )
     
     return _soar_integration
+
+
+    async def send_to_chronicle(
+        self,
+        event: IDORDetectionEvent,
+        create_case: bool = True,
+        annotate_udm: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Send detection to Chronicle SOAR with PII scrubbing options.
+        
+        Security:
+            - Case data: PII scrubbing configurable via SCRUB_PII_FOR_CHRONICLE
+            - UDM annotations: ALWAYS PII-scrubbed (long-term storage compliance)
+        
+        Args:
+            event: IDOR detection event
+            create_case: Create Chronicle case
+            annotate_udm: Annotate original UDM events
+        
+        Returns:
+            dict: Send result with case_id and annotation_id
+        """
+        if not self.chronicle_enabled or not self.chronicle_client:
+            logger.warning("Chronicle SOAR not configured")
+            return {"success": False, "error": "Chronicle not configured"}
+        
+        results = {}
+        
+        try:
+            # Create Chronicle case (PII scrubbing configurable)
+            if create_case:
+                logger.info(f"Creating Chronicle case for event: {event.event_id}")
+                
+                case_request = ChronicleCaseRequest(
+                    title=f"IDOR Attack Detected: {event.severity.value}",
+                    description=f"Identity-Asset Monitor detected IDOR enumeration attack.\n\n"
+                               f"User: {event.telemetry_snapshot.user_id}\n"
+                               f"Session: {event.telemetry_snapshot.get_session_identifier()}\n"
+                               f"Distinct Resources: {event.distinct_resources_accessed}\n"
+                               f"Time Window: {event.time_window_seconds}s\n\n"
+                               f"Failed Resources: {', '.join(event.failed_resources)}\n"
+                               f"Resource Owners: {', '.join(event.resource_owners)}\n\n"
+                               f"Detection Logic: {event.is_sequential and 'Sequential' or 'Non-sequential'} "
+                               f"access pattern detected.",
+                    severity=ChronicleSeverity[event.severity.value],
+                    alert_id=event.event_id,
+                    detection_timestamp=event.detection_timestamp,
+                    iocs=[],  # IOCs not applicable for IDOR
+                    affected_assets=[],
+                    affected_users=[event.telemetry_snapshot.user_id],
+                    ai_reasoning=f"Ownership-aware IDOR detection: {event.distinct_resources_accessed} "
+                                f"unauthorized access attempts to other users' resources.",
+                    confidence_score=0.95 if event.is_sequential else 0.80,
+                    mitre_tactics=event.mitre_tactics,
+                    mitre_techniques=event.mitre_techniques,
+                    assigned_to="soc_tier2",
+                    priority="high" if event.severity.value == "CRITICAL_IDOR_ATTACK" else "medium",
+                )
+                
+                # PII scrubbing for case: optional (configurable)
+                scrub_case = os.getenv("SCRUB_PII_FOR_CHRONICLE", "false").lower() == "true"
+                case_result = await self.chronicle_client.create_case(
+                    case_request,
+                    scrub_pii=scrub_case
+                )
+                
+                results["case_created"] = case_result.get("success", False)
+                results["case_id"] = case_result.get("case_id")
+                results["case_url"] = case_result.get("case_url")
+            
+            # Annotate UDM events (ALWAYS PII-scrubbed)
+            if annotate_udm and hasattr(event, 'raw_udm_event_ids'):
+                logger.info(f"Annotating UDM events for: {event.event_id}")
+                
+                # Create annotation for each UDM event
+                for udm_event_id in event.raw_udm_event_ids[:5]:  # Limit to 5
+                    annotation = ChronicleUDMAnnotation(
+                        event_id=udm_event_id,
+                        event_timestamp=event.detection_timestamp,
+                        annotation_type="ai_idor_detection",
+                        annotation_text=f"IDOR Attack Detected (AI Confidence: 95%): "
+                                      f"User attempted unauthorized access to {event.distinct_resources_accessed} "
+                                      f"resources owned by other users. "
+                                      f"Pattern: {event.is_sequential and 'Sequential' or 'Non-sequential'}. "
+                                      f"MITRE: {', '.join(event.mitre_techniques)}.",
+                        triage_result=event.severity.value,
+                        confidence=0.95 if event.is_sequential else 0.80,
+                        severity_override=ChronicleSeverity[event.severity.value],
+                        tags=["idor_attack", "ownership_violation", "automated_detection"],
+                        mitre_tactics=event.mitre_tactics,
+                        mitre_techniques=event.mitre_techniques,
+                        annotated_by="llm-soc-triage-idor-monitor",
+                    )
+                    
+                    # UDM annotations: ALWAYS scrubbed (non-configurable)
+                    annotation_result = await self.chronicle_client.annotate_udm_event(annotation)
+                    
+                    if annotation_result.get("success"):
+                        results["udm_annotations"] = results.get("udm_annotations", [])
+                        results["udm_annotations"].append(annotation_result.get("annotation_id"))
+            
+            results["success"] = results.get("case_created", False) or bool(results.get("udm_annotations"))
+            
+            logger.info(f"Chronicle SOAR submission complete: {event.event_id}")
+            return results
+        
+        except Exception as e:
+            logger.error(f"Chronicle SOAR submission failed: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def send_alert(
+        self,
+        event: IDORDetectionEvent,
+        auto_hold: bool = True,
+        scrub_pii_for_soar: Optional[bool] = None,
+        send_to_chronicle: bool = None,
+    ) -> Dict[str, Any]:
+        """
+        Send IDOR detection alert to SOAR with Chronicle support.
+        
+        Enhanced to support both webhook-based SOAR and Chronicle SOAR.
+        
+        Args:
+            event: IDOR detection event
+            auto_hold: Whether to trigger auto-hold action
+            scrub_pii_for_soar: Override default PII scrubbing for webhook SOAR
+            send_to_chronicle: Send to Chronicle SOAR (default: check env)
+        
+        Returns:
+            dict: Send result with incident_id or case_id
+        """
+        results = {}
+        
+        # Send to webhook SOAR (existing)
+        if self.webhook_url:
+            webhook_result = await self._send_webhook(event, auto_hold, scrub_pii_for_soar)
+            results["webhook"] = webhook_result
+        
+        # Send to Chronicle SOAR (new)
+        _send_chronicle = send_to_chronicle if send_to_chronicle is not None \
+                         else self.chronicle_enabled
+        
+        if _send_chronicle:
+            chronicle_result = await self.send_to_chronicle(
+                event,
+                create_case=True,
+                annotate_udm=os.getenv("CHRONICLE_UDM_ANNOTATIONS", "true").lower() == "true"
+            )
+            results["chronicle"] = chronicle_result
+        
+        # Aggregate success
+        results["success"] = any(
+            r.get("success", False) 
+            for r in [results.get("webhook"), results.get("chronicle")] 
+            if r
+        )
+        
+        return results
+    
+    async def _send_webhook(
+        self,
+        event: IDORDetectionEvent,
+        auto_hold: bool = True,
+        scrub_pii_for_soar: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """Original webhook-based SOAR send (extracted for clarity)."""
+        if not self.is_configured():
+            logger.warning("SOAR webhook not configured, skipping alert")
+            return {"success": False, "error": "SOAR not configured"}
+        
+        # Check if PII scrubbing is enabled
+        _scrub = scrub_pii_for_soar if scrub_pii_for_soar is not None \
+                 else os.getenv("SCRUB_PII_FOR_SOAR", "false").lower() == "true"
+        
+        if _scrub:
+            logger.info(f"Scrubbing PII from event {event.event_id} before SOAR transmission")
+            event = scrub_event_for_soar(event)
+        
+        # Format payload for platform
+        payload = self._format_payload(event, auto_hold)
+        
+        # Send with retry logic
+        attempt = 0
+        last_error = None
+        
+        while attempt < self.retry_attempts:
+            try:
+                attempt += 1
+                logger.info(
+                    f"Sending IDOR alert to SOAR: {event.event_id} "
+                    f"(attempt {attempt}/{self.retry_attempts})"
+                )
+                
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(
+                        self.webhook_url,
+                        json=payload,
+                        headers=self._get_headers(),
+                    )
+                    response.raise_for_status()
+                
+                result = response.json() if response.content else {}
+                incident_id = result.get("incident_id") or result.get("id") or event.event_id
+                
+                logger.info(f"SOAR alert sent successfully: {incident_id}")
+                
+                return {
+                    "success": True,
+                    "incident_id": incident_id,
+                    "platform": self.platform.value,
+                    "attempt": attempt,
+                }
+            
+            except Exception as e:
+                last_error = str(e)
+                logger.warning(
+                    f"SOAR alert attempt {attempt} failed: {last_error}"
+                )
+                
+                if attempt < self.retry_attempts:
+                    # Exponential backoff
+                    await asyncio.sleep(2 ** attempt)
+        
+        # All retries failed
+        logger.error(
+            f"SOAR alert failed after {self.retry_attempts} attempts: "
+            f"{last_error}"
+        )
+        
+        return {
+            "success": False,
+            "error": last_error,
+            "attempts": self.retry_attempts,
+        }
 
 
 async def send_idor_alert(

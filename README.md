@@ -161,6 +161,180 @@ Raw Alert → Normalize → Scrub PII → Prompt Engine → Claude → Structure
 
 ---
 
+## Chronicle Integration: Security Data Lake Context
+
+<details>
+<summary><b>Google Chronicle as Alert Source, Enrichment Layer, and SOAR Destination</b></summary>
+
+### Overview
+
+Chronicle integration transforms the middleware into a detection and response pipeline by connecting to Google's security data lake. Chronicle serves three critical roles while maintaining strict PII scrubbing at all data boundaries:
+
+1. **Alert Source**: YARA-L rules detect patterns and forward UDM events via webhook
+2. **Context Enrichment**: API queries provide IOC prevalence, user baselines, and network intelligence
+3. **SOAR Destination**: High-confidence triage results create Chronicle cases and annotate UDM events
+
+### Three-Layer Security Architecture
+
+All Chronicle data flows through the "Sandwich Model" security gates:
+
+**Inbound (Red Gate - Chronicle → Middleware)**:
+- Raw UDM events contain PII (IPs, emails, hostnames, usernames)
+- **MANDATORY PII scrubbing** before LLM analysis
+- Webhook signature verification prevents spoofing
+
+**Context Queries (Yellow Gate - Chronicle API → LLM)**:
+- Prevalence/baseline API responses contain hostnames, user IDs, IPs
+- **MANDATORY PII scrubbing** before LLM context injection
+- Only aggregated/anonymized data reaches LLM prompts
+
+**Outbound (Green Gate - Middleware → Chronicle)**:
+- Case data: **Configurable scrubbing** (default: false for internal Chronicle)
+- UDM annotations: **ALWAYS scrubbed** (long-term storage compliance, non-configurable)
+
+### PII Decision Matrix
+
+| Data Flow | Contains PII? | Scrub Before LLM? | Scrub Before Chronicle? |
+|-----------|---------------|-------------------|-------------------------|
+| Chronicle UDM → Middleware | Yes (IPs, emails, hostnames) | **YES (Required)** | N/A |
+| Chronicle API → LLM Context | Yes (hostnames, users) | **YES (Required)** | N/A |
+| LLM Result → Chronicle Case | Maybe (in reasoning) | N/A | **CONFIGURABLE** (default: false) |
+| LLM Result → UDM Annotation | Maybe (in reasoning) | N/A | **YES (Always, compliance)** |
+
+**Configuration**:
+```bash
+# Chronicle PII Scrubbing Policy
+SCRUB_PII_FOR_CHRONICLE=false  # Chronicle is internal, full context helpful for analysts
+
+# Note: UDM annotations ALWAYS scrubbed (GDPR/SOC 2 compliance, non-configurable)
+```
+
+### Integration Flow
+
+```mermaid
+flowchart LR
+    YARA[Chronicle YARA-L<br/>Rule Triggers]
+    Webhook[Webhook<br/>PII Scrubbed]
+    Context[Chronicle API<br/>Context Queries]
+    LLM{Claude LLM<br/>Analysis}
+    Cases[Chronicle<br/>Case Created]
+    Annot[UDM Events<br/>Annotated]
+    
+    YARA -->|Raw UDM| Webhook
+    Webhook -->|Scrubbed Data| LLM
+    Context -.->|Prevalence<br/>Scrubbed| LLM
+    LLM --> Cases
+    LLM --> Annot
+    
+    style Webhook fill:#fca5a5
+    style Context fill:#fde047
+    style Cases fill:#86efac
+    style Annot fill:#86efac
+```
+
+### Context Enrichment Examples
+
+**IOC Prevalence** ("How many hosts have seen this hash?"):
+```
+"This file hash seen on 3 other endpoints in last 30 days (uncommon)"
+```
+
+**User Baseline** ("Is this login behavior normal for this user?"):
+```
+"User typically logs in from US-East, US-West. Average 2.3 logins/day. 
+Current login from Asia (unusual)."
+```
+
+**Network Intelligence** ("Has this IP connected to us before?"):
+```
+"New IP - 0 prior connections to our infrastructure in last 90 days"
+```
+
+All enrichment data is **PII-scrubbed** before LLM context injection. Hostnames become `[HOSTNAME_REDACTED]`, IPs become `[IP_REDACTED]`, while preserving contextual intelligence (counts, locations, patterns).
+
+### YARA-L Detection Rules
+
+Chronicle rules detect security patterns and forward to middleware:
+
+**IDOR Sequential Enumeration**:
+```yaml
+rule idor_sequential_enumeration_trigger {
+  events:
+    $e.metadata.event_type = "HTTP_REQUEST"
+    $e.network.http.response_code = 403
+    $e.target.url matches /\/loan_applications\/\d+/
+  
+  match:
+    $session_id over 5m
+  
+  condition:
+    $distinct_loan_ids >= 3  # Enumeration threshold
+  
+  options:
+    webhook_url = "https://middleware.company.com/v1/chronicle/webhook"
+    webhook_auth = "Bearer ${MIDDLEWARE_API_KEY}"
+}
+```
+
+See [`docs/chronicle_yara_rules/idor_detection.yaral`](docs/chronicle_yara_rules/idor_detection.yaral) for complete rule templates.
+
+### SOAR Workflows
+
+**Chronicle Case Creation** (High-Confidence Alerts):
+- Automated case creation for CRITICAL severity detections
+- Includes AI reasoning, MITRE mappings, affected users
+- PII scrubbing configurable based on Chronicle deployment (internal vs. external)
+
+**UDM Event Annotation** (AI Context for Analysts):
+- Original UDM events annotated with AI triage results
+- Annotations **always PII-scrubbed** (compliance, long-term storage)
+- Future Chronicle searches surface AI context automatically
+
+Example annotation:
+```
+"IDOR Attack Detected (AI Confidence: 95%): User attempted unauthorized 
+access to 4 resources owned by other users. Pattern: Sequential. 
+MITRE: T1213.002."
+```
+
+### Security Validation
+
+Before any Chronicle data reaches the LLM:
+- UDM webhook events validated against schema
+- PII scrubbing applied to raw UDM logs (IPs, emails, hostnames redacted)
+- Chronicle API responses scrubbed (prevalence/baseline data anonymized)
+- User/asset identifiers tokenized for correlation
+- XML delimiters wrap Chronicle-sourced data in prompts
+
+Before any data returns to Chronicle:
+- LLM output validated against response schema
+- UDM annotations **always** PII-scrubbed (compliance, non-configurable)
+- Case data scrubbing configurable (internal vs. external Chronicle instance)
+- MITRE ATT&CK mappings included for threat intel correlation
+
+### Setup and Deployment
+
+See [`docs/CHRONICLE_INTEGRATION.md`](docs/CHRONICLE_INTEGRATION.md) for comprehensive setup guide including:
+- Service account configuration and permissions
+- YARA-L rule deployment and customization
+- Webhook endpoint configuration and testing
+- PII scrubbing policy decisions
+- Context enrichment tuning
+- SOAR workflow examples
+- Troubleshooting common issues
+- Performance optimization strategies
+
+**Quick Start**:
+1. Configure Chronicle service account credentials
+2. Deploy YARA-L rules to Chronicle
+3. Enable Chronicle features via environment variables
+4. Test webhook delivery and PII scrubbing
+5. Monitor Chronicle case creation and UDM annotations
+
+</details>
+
+---
+
 ## Context-Preserving PII Scrubber
 
 <details>
