@@ -167,7 +167,7 @@ async def triage_alert(
         # Step 5: Structured LLM Call
         client = get_llm_client()
         message = client.messages.create(
-            model=os.getenv("MODEL_NAME", "claude-3-5-sonnet-20241022"),
+            model=os.getenv("MODEL_NAME", "claude-3-5-sonnet-20250122"),
             max_tokens=int(os.getenv("MAX_TOKENS", "4096")),
             temperature=float(os.getenv("TEMPERATURE", "0.0")),
             messages=[
@@ -229,7 +229,7 @@ async def health_check():
         "version": "1.0.0",
         "configuration": {
             "llm_provider": "anthropic",
-            "model": os.getenv("MODEL_NAME", "claude-3-5-sonnet-20241022"),
+            "model": os.getenv("MODEL_NAME", "claude-3-5-sonnet-20250122"),
             "api_key_configured": bool(os.getenv("ANTHROPIC_API_KEY")),
             "pii_scrubbing_enabled": True,
             "rag_enabled": False  # TODO: Enable when vector DB is configured
@@ -383,7 +383,7 @@ async def triage_alert_internal(alert: AlertRequest) -> TriageResponse:
         # Step 5: Structured LLM Call
         client = get_llm_client()
         message = client.messages.create(
-            model=os.getenv("MODEL_NAME", "claude-3-5-sonnet-20241022"),
+            model=os.getenv("MODEL_NAME", "claude-3-5-sonnet-20250122"),
             max_tokens=int(os.getenv("MAX_TOKENS", "4096")),
             temperature=float(os.getenv("TEMPERATURE", "0.0")),
             messages=[{"role": "user", "content": prompt}]
