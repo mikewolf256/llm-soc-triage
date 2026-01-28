@@ -63,14 +63,42 @@ Analyze this security alert and provide a structured triage assessment. Consider
 4. **Evidence**: What indicators support your assessment?
 5. **Next Steps**: What should the SOC do immediately?
 
-Be direct and actionable. We need decisions, not hedging.
+**IMPORTANT**: If the business context section provides a "STRONG RECOMMENDATION" for a specific
+verdict classification, you MUST use that exact verdict classification in your response unless
+there is overwhelming contrary evidence. The business context includes automated detection logic
+that has already analyzed this alert type. Trust the recommendation.
+
+<idor_detection_guidance>
+When analyzing Chronicle IDOR (Insecure Direct Object Reference) alerts, use these STRICT classification rules:
+
+**Use CRITICAL_IDOR_ATTACK when:**
+- Business context says "STRONG RECOMMENDATION: Classify as CRITICAL_IDOR_ATTACK", OR
+- Sequential resource enumeration (4+ resources) + Unknown IP + 403 responses
+
+**Use FALSE_POSITIVE when:**
+- Business context says "STRONG RECOMMENDATION: Classify as FALSE_POSITIVE", OR
+- QA/test account activity (qa-bot, QA Automation, Caribou QA Test Suite)
+- Known employee accessing own resources (legitimate customer access)
+
+**Use INSIDER_THREAT when:**
+- Business context says "STRONG RECOMMENDATION: Classify as INSIDER_THREAT", OR  
+- Employee domain (@company.com) + Accessing unauthorized resources + Corporate network
+
+**Use NEEDS_INVESTIGATION only when:**
+- No clear pattern matches above criteria
+- Business context does NOT provide a STRONG RECOMMENDATION
+- Ambiguous signals requiring human review
+
+RULE: If business context provides a "STRONG RECOMMENDATION" with a specific verdict, 
+you MUST use that exact verdict. Do not downgrade to NEEDS_INVESTIGATION.
+</idor_detection_guidance>
 </instructions>
 
 <output_format>
 Provide your response in the following XML structure:
 
 <triage>
-  <result>[FALSE_POSITIVE|LOW_PRIORITY|NEEDS_INVESTIGATION|CRITICAL|CONFIRMED_BREACH]</result>
+  <result>[FALSE_POSITIVE|LOW_PRIORITY|NEEDS_INVESTIGATION|CRITICAL|CRITICAL_IDOR_ATTACK|INSIDER_THREAT|CONFIRMED_BREACH]</result>
   <confidence>[0.0-1.0]</confidence>
   <reasoning>
     Your detailed analysis here. What patterns do you see? What's the threat narrative?
@@ -121,6 +149,68 @@ Example 2 - Critical:
     <ioc>185.220.101.42</ioc>
     <ioc>update-checker.xyz</ioc>
     <ioc>SHA256: a3b2c1d4e5f6...</ioc>
+  </iocs>
+</triage>
+
+Example 3 - IDOR Attack:
+<triage>
+  <result>CRITICAL_IDOR_ATTACK</result>
+  <confidence>0.92</confidence>
+  <reasoning>
+    Sequential enumeration of 4 loan application IDs (4395669, 4395670, 4395671, 4395672).
+    All requests resulted in 403 Forbidden, indicating authorization bypass attempts.
+    Source IP has no established baseline. Pattern matches IDOR exploitation technique.
+    This is an active attack attempting to access unauthorized customer data.
+  </reasoning>
+  <next_actions>
+    <action>Block source IP and session immediately</action>
+    <action>Create Chronicle case for investigation</action>
+    <action>Check if any requests succeeded (200 responses)</action>
+    <action>Audit all resources accessed by this user/session</action>
+  </next_actions>
+  <iocs>
+    <ioc>203.0.113.42 (attacker IP)</ioc>
+    <ioc>session_abc123xyz (compromised session)</ioc>
+  </iocs>
+</triage>
+
+Example 4 - QA Testing (False Positive):
+<triage>
+  <result>FALSE_POSITIVE</result>
+  <confidence>0.98</confidence>
+  <reasoning>
+    Activity from qa-bot@caribou.com account with "QA Automation Bot" user display name.
+    This is legitimate automated testing of authorization boundaries.
+    Pattern matches expected QA regression testing behavior. Business context confirms
+    this is from known QA testing infrastructure (Caribou QA Test Suite).
+  </reasoning>
+  <next_actions>
+    <action>Close alert as expected QA activity</action>
+    <action>Consider excluding QA accounts from IDOR detection rule</action>
+  </next_actions>
+  <iocs></iocs>
+</triage>
+
+Example 5 - Insider Threat:
+<triage>
+  <result>INSIDER_THREAT</result>
+  <confidence>0.88</confidence>
+  <reasoning>
+    Employee sarah.jenkins@caribou.com accessing 6 customer loan applications outside
+    their assigned portfolio. Source is corporate laptop (CARIBOU-LAPTOP-1234), indicating
+    insider not external attacker. Security result states "Employee accessing customer loans
+    outside their assigned portfolio". Pattern suggests data snooping or unauthorized
+    reconnaissance by trusted insider.
+  </reasoning>
+  <next_actions>
+    <action>Create HR investigation case</action>
+    <action>Notify security team and manager immediately</action>
+    <action>Pull full audit log for this employee (past 30 days)</action>
+    <action>Check if any data was exfiltrated</action>
+  </next_actions>
+  <iocs>
+    <ioc>employee_sarah_jenkins (user account)</ioc>
+    <ioc>CARIBOU-LAPTOP-1234.corp.caribou.com</ioc>
   </iocs>
 </triage>
 </examples>

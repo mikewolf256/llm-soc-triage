@@ -32,6 +32,8 @@ class TriageResult(str, Enum):
     LOW_PRIORITY = "LOW_PRIORITY"
     NEEDS_INVESTIGATION = "NEEDS_INVESTIGATION"
     CRITICAL = "CRITICAL"
+    CRITICAL_IDOR_ATTACK = "CRITICAL_IDOR_ATTACK"
+    INSIDER_THREAT = "INSIDER_THREAT"
     CONFIRMED_BREACH = "CONFIRMED_BREACH"
 
 
@@ -145,11 +147,13 @@ class TriageResponse(BaseModel):
         The Enum already enforces this, but this validator provides
         explicit documentation of why we restrict to these values.
         
-        These five dispositions map directly to our SOAR playbooks:
+        These dispositions map directly to our SOAR playbooks:
         - FALSE_POSITIVE → Auto-close with logging
         - LOW_PRIORITY → Queue for batch review
         - NEEDS_INVESTIGATION → Assign to analyst
         - CRITICAL → Page on-call team
+        - CRITICAL_IDOR_ATTACK → Block session, create case, audit access
+        - INSIDER_THREAT → Create HR case, notify security team
         - CONFIRMED_BREACH → Execute IR playbook
         """
         return v

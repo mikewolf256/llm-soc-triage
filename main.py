@@ -40,7 +40,8 @@ from core.chronicle_integration import get_chronicle_client, get_chronicle_alert
 from core.schema.chronicle_events import ChronicleUDMAlert, ChronicleWebhookResponse
 
 # Load environment variables
-load_dotenv()
+# Note: override=False means existing env vars (from docker-compose) take precedence
+load_dotenv(override=False)
 
 # Configure logging
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -167,7 +168,7 @@ async def triage_alert(
         # Step 5: Structured LLM Call
         client = get_llm_client()
         message = client.messages.create(
-            model=os.getenv("MODEL_NAME", "claude-3-5-sonnet-20250122"),
+            model=os.getenv("MODEL_NAME", "claude-sonnet-4-5-20250929"),
             max_tokens=int(os.getenv("MAX_TOKENS", "4096")),
             temperature=float(os.getenv("TEMPERATURE", "0.0")),
             messages=[
@@ -395,7 +396,7 @@ async def triage_alert_internal(alert: AlertRequest) -> TriageResponse:
         # Step 5: Structured LLM Call
         client = get_llm_client()
         message = client.messages.create(
-            model=os.getenv("MODEL_NAME", "claude-3-5-sonnet-20250122"),
+            model=os.getenv("MODEL_NAME", "claude-sonnet-4-5-20250929"),
             max_tokens=int(os.getenv("MAX_TOKENS", "4096")),
             temperature=float(os.getenv("TEMPERATURE", "0.0")),
             messages=[{"role": "user", "content": prompt}]

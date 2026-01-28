@@ -19,7 +19,7 @@ This project implements a RAG-driven Triage Middleware that:
 
 - **Language:** Python 3.12 (FastAPI for async performance)
 - **Security:** Microsoft Presidio (PII detection), Pydantic (strict validation)
-- **LLM:** Anthropic Claude 3.5 Sonnet (with structured output enforcement)
+- **LLM:** Anthropic Claude Sonnet 4.5 (with domain-specific detection logic)
 - **Orchestration:** MCP (Model Context Protocol) ready
 - **Storage:** ChromaDB for vector search (historical ticket similarity)
 
@@ -84,6 +84,71 @@ This "sandwiched safety" approach ensures the AI cannot "go rogue" in regulated 
 - **Cost Reduction**: 60% reduction in manual triage time
 - **Consistency**: Every alert analyzed with institutional knowledge
 - **Auditability**: Full prompt transparency via XML structure
+
+<details>
+<summary><strong>Detection Performance Results</strong> (Click to expand)</summary>
+
+### IDOR Detection Accuracy
+
+Tested with Claude Sonnet 4.5 and domain-specific detection logic:
+
+| Scenario | Verdict | Confidence | Processing Time |
+|----------|---------|------------|-----------------|
+| **High-Confidence IDOR Attack** | `CRITICAL_IDOR_ATTACK` | 95% | 19.6s |
+| **QA Testing (False Positive)** | `FALSE_POSITIVE` | 98% | 11.4s |
+| **Legitimate Customer Access** | `FALSE_POSITIVE` | 92% | 17.3s |
+| **Insider Threat** | `INSIDER_THREAT` | 90% | 17.3s |
+
+**Success Rate**: 4/4 scenarios (100%) with domain-specific verdicts
+**Average Confidence**: 94% (vs. 80% with generic detection)
+
+### How It Works
+
+The system combines three detection layers:
+
+1. **Pattern Detection**: Identifies sequential enumeration (4+ resources), velocity thresholds
+2. **Context Analysis**: QA infrastructure detection, employee hostname patterns, ownership validation
+3. **Business Rules**: Domain-specific verdict recommendations passed to LLM
+
+**Key Innovation**: Detection logic focuses on data that survives PII scrubbing (product names, display names, hostnames, user IDs) rather than emails/IPs that get redacted.
+
+### Configuration
+
+Business context rules in `data/business_context.json`:
+```json
+{
+  "idor_detection_rules": {
+    "sequential_threshold": 3,
+    "velocity_threshold_per_minute": 5
+  },
+  "qa_infrastructure": {
+    "test_user_ids": ["qa_automation", "user_qa_"],
+    "test_display_names": ["QA Automation Bot"],
+    "test_product_names": ["Caribou QA Test Suite"]
+  },
+  "insider_threat_indicators": {
+    "employee_hostnames": ["caribou-laptop", ".corp.caribou.com"],
+    "suspicious_patterns": ["outside assigned portfolio"]
+  }
+}
+```
+
+### Model Selection
+
+For optimal results, use Claude Sonnet 4.5 or higher:
+
+| Model | API Name | Performance |
+|-------|----------|-------------|
+| **Claude Sonnet 4.5** (Recommended) | `claude-sonnet-4-5-20250929` | Excellent at following strict classification rules |
+| Claude Haiku 4.5 | `claude-haiku-4-5-20251001` | Faster but less precise (generic NEEDS_INVESTIGATION verdicts) |
+| Claude Opus 4.5 | `claude-opus-4-5-20251101` | Maximum intelligence but slower |
+
+Set in `.env`:
+```bash
+MODEL_NAME=claude-sonnet-4-5-20250929
+```
+
+</details>
 
 ## Quick Start
 

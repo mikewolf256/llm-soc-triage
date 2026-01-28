@@ -194,6 +194,164 @@ class BusinessContextManager:
         
         return multiplier
     
+    def detect_idor_pattern(self, alert: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Detect IDOR enumeration patterns in Chronicle UDM alerts
+        
+        Returns: IDOR context if pattern detected, None otherwise
+        """
+        raw_data = alert.get("raw_data", {})
+        
+        # Extract IDOR signals
+        distinct_resources = raw_data.get("distinct_resources", 0)
+        description = alert.get("description", "")
+        
+        is_sequential = "sequential" in description.lower()
+        sequential_threshold = self.context.get("idor_detection_rules", {}).get("sequential_threshold", 3)
+        is_high_velocity = distinct_resources >= sequential_threshold
+        
+        if is_sequential and is_high_velocity:
+            return {
+                "idor_detected": True,
+                "pattern_type": "sequential_enumeration",
+                "resource_count": distinct_resources,
+                "severity": "high" if distinct_resources >= 4 else "medium",
+                "recommended_verdict": "CRITICAL_IDOR_ATTACK"
+            }
+        
+        return None
+    
+    def is_qa_test_activity(self, alert: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Check if activity matches QA testing patterns.
+        Note: Checks data that survives PII scrubbing (product names, display names, user IDs).
+        
+        Returns: QA context if detected, None otherwise
+        """
+        qa_config = self.context.get("qa_infrastructure", {})
+        
+        affected_user = alert.get("affected_user", "")
+        description = alert.get("description", "")
+        raw_data = alert.get("raw_data", {})
+        
+        # Build comprehensive search text including UDM event data
+        search_text = f"{affected_user} {description}".lower()
+        
+        # Check UDM events for QA indicators (focus on non-PII fields)
+        udm_events = raw_data.get("udm_sample_events", [])
+        for event in udm_events:
+            # Check product name (NOT scrubbed)
+            product_name = event.get("metadata", {}).get("product_name", "")
+            search_text += f" {product_name}".lower()
+            
+            # Check user display name (NOT scrubbed)
+            user_info = event.get("principal", {}).get("user", {})
+            display_name = user_info.get("user_display_name", "")
+            search_text += f" {display_name}".lower()
+            
+            # Check user_id (NOT scrubbed)
+            user_id = user_info.get("user_id", "")
+            search_text += f" {user_id}".lower()
+        
+        # Check for QA product names (highest confidence - these survive scrubbing)
+        for product_name in qa_config.get("test_product_names", []):
+            if product_name.lower() in search_text:
+                return {
+                    "is_qa_testing": True,
+                    "reason": f"QA testing infrastructure detected: {product_name}",
+                    "recommended_verdict": "FALSE_POSITIVE",
+                    "recommended_actions": ["close_as_expected_qa_activity"]
+                }
+        
+        # Check for QA display names
+        for display_name in qa_config.get("test_display_names", []):
+            if display_name.lower() in search_text:
+                return {
+                    "is_qa_testing": True,
+                    "reason": f"QA account detected: {display_name}",
+                    "recommended_verdict": "FALSE_POSITIVE",
+                    "recommended_actions": ["close_as_expected_qa_activity"]
+                }
+        
+        # Check for QA user IDs
+        for user_id_pattern in qa_config.get("test_user_ids", []):
+            if user_id_pattern.lower() in search_text:
+                return {
+                    "is_qa_testing": True,
+                    "reason": f"QA user ID detected: contains '{user_id_pattern}'",
+                    "recommended_verdict": "FALSE_POSITIVE",
+                    "recommended_actions": ["close_as_expected_qa_activity"]
+                }
+        
+        return None
+    
+    def detect_insider_threat(self, alert: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Detect insider threat patterns (employee accessing unauthorized data).
+        Note: Focuses on hostnames and user IDs that survive PII scrubbing.
+        
+        Returns: Insider threat context if detected, None otherwise
+        """
+        insider_config = self.context.get("insider_threat_indicators", {})
+        
+        affected_user = alert.get("affected_user", "")
+        description = alert.get("description", "").lower()
+        raw_data = alert.get("raw_data", {})
+        
+        # Build comprehensive search text including UDM event data
+        search_text = f"{affected_user} {description}".lower()
+        
+        # Check UDM events for employee indicators (focus on non-PII fields)
+        udm_events = raw_data.get("udm_sample_events", [])
+        for event in udm_events:
+            # Check hostname for corporate identifiers (NOT scrubbed)
+            hostname = event.get("principal", {}).get("hostname", "")
+            search_text += f" {hostname}".lower()
+            
+            # Check user_id (NOT scrubbed)
+            user_info = event.get("principal", {}).get("user", {})
+            user_id = user_info.get("user_id", "")
+            search_text += f" {user_id}".lower()
+            
+            # Check security result descriptions (NOT scrubbed)
+            for sec_result in event.get("security_result", []):
+                sec_desc = sec_result.get("description", "")
+                search_text += f" {sec_desc}".lower()
+        
+        # Check if employee (by hostname or user_id patterns)
+        is_employee = any(
+            hostname_pattern in search_text 
+            for hostname_pattern in insider_config.get("employee_hostnames", [])
+        )
+        
+        if not is_employee:
+            # Also check user_id patterns
+            is_employee = any(
+                user_id_pattern in search_text
+                for user_id_pattern in insider_config.get("employee_user_ids", [])
+            )
+        
+        # Check for suspicious access patterns in descriptions
+        is_suspicious = any(
+            pattern in search_text 
+            for pattern in insider_config.get("suspicious_patterns", [])
+        )
+        
+        if is_employee and is_suspicious:
+            return {
+                "insider_threat_detected": True,
+                "reason": "Employee accessing unauthorized customer resources",
+                "recommended_verdict": "INSIDER_THREAT",
+                "recommended_actions": [
+                    "create_hr_case",
+                    "notify_security_team",
+                    "audit_access",
+                    "pull_full_audit_log"
+                ]
+            }
+        
+        return None
+    
     async def enrich_alert(self, alert: Dict[str, Any]) -> Dict[str, Any]:
         """
         Enrich alert with full business context (including Chronicle).
@@ -247,6 +405,24 @@ class BusinessContextManager:
         risk_multiplier = self.calculate_risk_multiplier(description, iocs)
         if risk_multiplier > 1.0:
             enrichment["business_context"]["risk_multiplier"] = risk_multiplier
+        
+        # IDOR Detection
+        idor_context = self.detect_idor_pattern(alert)
+        if idor_context:
+            enrichment["business_context"]["idor_detection"] = idor_context
+            logger.info(f"IDOR pattern detected: {idor_context['pattern_type']}")
+        
+        # QA Testing Detection (check this early - if QA, likely false positive)
+        qa_context = self.is_qa_test_activity(alert)
+        if qa_context:
+            enrichment["business_context"]["qa_testing"] = qa_context
+            logger.info(f"QA testing activity detected: {qa_context['reason']}")
+        
+        # Insider Threat Detection
+        insider_context = self.detect_insider_threat(alert)
+        if insider_context:
+            enrichment["business_context"]["insider_threat"] = insider_context
+            logger.info(f"Insider threat detected: {insider_context['reason']}")
         
         # Add compliance requirements
         enrichment["business_context"]["compliance"] = self.context.get("compliance_requirements", {})
@@ -311,6 +487,31 @@ def format_business_context_for_prompt(enrichment: Dict[str, Any]) -> str:
         
         if "risk_multiplier" in context and context["risk_multiplier"] > 1.0:
             lines.append(f"- **Risk Multiplier**: {context['risk_multiplier']}x (high-risk indicators present)")
+        
+        if "idor_detection" in context:
+            idor = context["idor_detection"]
+            lines.append("")
+            lines.append(f"**⚠️ IDOR ATTACK PATTERN DETECTED ⚠️**")
+            lines.append(f"- Pattern: {idor['pattern_type']} ({idor['resource_count']} resources)")
+            lines.append(f"- Severity: {idor['severity'].upper()}")
+            lines.append(f"- **STRONG RECOMMENDATION: Classify as {idor['recommended_verdict']}**")
+            lines.append(f"- This matches known IDOR exploitation techniques")
+        
+        if "qa_testing" in context:
+            qa = context["qa_testing"]
+            lines.append("")
+            lines.append(f"**✓ QA Testing Activity Detected**")
+            lines.append(f"- {qa['reason']}")
+            lines.append(f"- **STRONG RECOMMENDATION: Classify as {qa['recommended_verdict']}**")
+            lines.append(f"- This is legitimate automated testing, not a real attack")
+        
+        if "insider_threat" in context:
+            insider = context["insider_threat"]
+            lines.append("")
+            lines.append(f"**⚠️ INSIDER THREAT INDICATORS ⚠️**")
+            lines.append(f"- {insider['reason']}")
+            lines.append(f"- **STRONG RECOMMENDATION: Classify as {insider['recommended_verdict']}**")
+            lines.append(f"- Immediate actions: {', '.join(insider['recommended_actions'][:2])}")
     
     # Chronicle context (if available)
     if enrichment.get("chronicle_context"):

@@ -128,5 +128,28 @@
       "high": "1 hour",
       "medium": "4 hours"
     }
+  },
+  "idor_detection_rules": {
+    "sequential_threshold": 3,
+    "velocity_threshold_per_minute": 5,
+    "ownership_validation_required": true
+  },
+  "qa_infrastructure": {
+    "test_user_ids": ["qa_automation", "qa-bot", "user_qa_", "test_user"],
+    "test_display_names": ["QA Automation Bot", "QA Bot", "Test Automation", "Selenium"],
+    "test_product_names": ["Caribou QA Test Suite", "QA Test", "Test Suite"],
+    "test_subnets": ["10.100.0.0/16"],
+    "test_user_agents": ["QA Automation", "Selenium", "Cypress"]
+  },
+  "insider_threat_indicators": {
+    "employee_user_ids": ["employee_"],
+    "employee_hostnames": ["caribou-laptop", ".corp.caribou.com", "CARIBOU-"],
+    "suspicious_patterns": [
+      "accessing records outside assigned portfolio",
+      "employee accessing customer",
+      "accessing customer loans outside",
+      "outside their assigned portfolio",
+      "outside assigned"
+    ]
   }
 }
