@@ -36,8 +36,8 @@ docs/
 *.md
 LICENSE
 
-# Tests (not needed in image)
-tests/
+# Tests (not needed in middleware image, but fixtures needed for chronicle-mock)
+# tests/ - commented out to allow fixtures for chronicle-mock build
 
 # Demo scripts (separate container)
 demo_chronicle.py
