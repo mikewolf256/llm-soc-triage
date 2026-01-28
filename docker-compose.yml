@@ -1,0 +1,145 @@
+version: '3.8'
+
+services:
+  # Redis for stateful IDOR tracking and caching
+  redis:
+    image: redis:7-alpine
+    container_name: llm-soc-triage-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - soc-triage-network
+    restart: unless-stopped
+
+  # Main middleware application
+  middleware:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: llm-soc-triage-middleware
+    ports:
+      - "8000:8000"
+    environment:
+      # Anthropic API
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - MODEL_NAME=${MODEL_NAME:-claude-3-5-sonnet-20241022}
+      - MAX_TOKENS=${MAX_TOKENS:-4096}
+      - TEMPERATURE=${TEMPERATURE:-0.0}
+      
+      # Redis connection
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      
+      # IDOR Detection Settings
+      - IDOR_THRESHOLD=${IDOR_THRESHOLD:-3}
+      - IDOR_TIME_WINDOW=${IDOR_TIME_WINDOW:-60}
+      - IDOR_REDIS_TTL=${IDOR_REDIS_TTL:-300}
+      
+      # PII Scrubbing
+      - SCRUB_PII_FOR_SOAR=${SCRUB_PII_FOR_SOAR:-false}
+      - SCRUB_PII_FOR_CHRONICLE=${SCRUB_PII_FOR_CHRONICLE:-false}
+      
+      # Chronicle Integration (use mock server in demo)
+      - CHRONICLE_REGION=${CHRONICLE_REGION:-us}
+      - CHRONICLE_CONTEXT_ENRICHMENT=${CHRONICLE_CONTEXT_ENRICHMENT:-true}
+      - CHRONICLE_SOAR_INTEGRATION=${CHRONICLE_SOAR_INTEGRATION:-true}
+      - CHRONICLE_UDM_ANNOTATIONS=${CHRONICLE_UDM_ANNOTATIONS:-true}
+      - CHRONICLE_WEBHOOK_SECRET=${CHRONICLE_WEBHOOK_SECRET:-demo_webhook_secret}
+      
+      # SOAR Integration
+      - SOAR_WEBHOOK_URL=${SOAR_WEBHOOK_URL:-}
+      - SOAR_PLATFORM=${SOAR_PLATFORM:-generic}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    
+    depends_on:
+      redis:
+        condition: service_healthy
+      chronicle-mock:
+        condition: service_healthy
+    
+    volumes:
+      # Mount business context data
+      - ./data:/app/data:ro
+      # Mount logs directory
+      - ./logs:/app/logs
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    networks:
+      - soc-triage-network
+    
+    restart: unless-stopped
+
+  # Mock Chronicle API server for demos
+  chronicle-mock:
+    build:
+      context: .
+      dockerfile: Dockerfile.chronicle-mock
+    container_name: llm-soc-triage-chronicle-mock
+    ports:
+      - "8001:8001"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    
+    networks:
+      - soc-triage-network
+    
+    restart: unless-stopped
+
+  # Optional: PostgreSQL for vector DB (future RAG implementation)
+  # Uncomment when vector DB is implemented
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: llm-soc-triage-postgres
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     - POSTGRES_USER=soc_triage
+  #     - POSTGRES_PASSWORD=secure_password_here
+  #     - POSTGRES_DB=soc_triage
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U soc_triage"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - soc-triage-network
+  #   restart: unless-stopped
+
+volumes:
+  redis_data:
+    driver: local
+  # postgres_data:
+  #   driver: local
+
+networks:
+  soc-triage-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

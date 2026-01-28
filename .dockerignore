@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+.github
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.cursor/
+
+# Environment
+.env
+.env.local
+*.log
+
+# Documentation (not needed in image)
+docs/
+*.md
+LICENSE
+
+# Tests (not needed in image)
+tests/
+
+# Demo scripts (separate container)
+demo_chronicle.py
+tests/fixtures/chronicle_mock_server.py
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# OS
+.DS_Store
+Thumbs.db
