@@ -1,6 +1,6 @@
-# AI-Assisted SOC Triage Engine
+# AI Assisted SOC Triage Engine
 
-A production-ready RAG-driven triage middleware for automated security alert analysis with privacy-first design.
+A production ready RAG driven triage middleware for automated security alert analysis with privacy first design.
 
 ## The Problem
 
@@ -8,18 +8,18 @@ Traditional SOAR playbooks are brittle and struggle with business context. SOC a
 
 ## The Solution
 
-This project implements a RAG-driven Triage Middleware that:
+This project implements a RAG driven Triage Middleware that:
 
 1. **Redacts PII** locally using Microsoft Presidio before LLM transmission
 2. **Retrieves Context** from vector database of historical ticket outcomes
-3. **Normalizes Data** into a strict schema ensuring machine-readable outcomes
+3. **Normalizes Data** into a strict schema ensuring machine readable outcomes
 4. **Enforces Guardrails** using XML delimiters to prevent prompt injection from malicious logs
 
 ## Tech Stack
 
 - **Language:** Python 3.12 (FastAPI for async performance)
 - **Security:** Microsoft Presidio (PII detection), Pydantic (strict validation)
-- **LLM:** Anthropic Claude Sonnet 4.5 (with domain-specific detection logic)
+- **LLM:** Anthropic Claude Sonnet 4.5 (with domain specific detection logic)
 - **Orchestration:** MCP (Model Context Protocol) ready
 - **Storage:** ChromaDB for vector search (historical ticket similarity)
 
@@ -90,7 +90,7 @@ This "sandwiched safety" approach ensures the AI cannot "go rogue" in regulated 
 
 ### IDOR Detection Accuracy
 
-Tested with Claude Sonnet 4.5 and domain-specific detection logic:
+Tested with Claude Sonnet 4.5 and domain specific detection logic:
 
 | Scenario | Verdict | Confidence | Processing Time |
 |----------|---------|------------|-----------------|
@@ -99,7 +99,7 @@ Tested with Claude Sonnet 4.5 and domain-specific detection logic:
 | **Legitimate Customer Access** | `FALSE_POSITIVE` | 92% | 17.3s |
 | **Insider Threat** | `INSIDER_THREAT` | 90% | 17.3s |
 
-**Success Rate**: 4/4 scenarios (100%) with domain-specific verdicts
+**Success Rate**: 4/4 scenarios (100%) with domain specific verdicts
 **Average Confidence**: 94% (vs. 80% with generic detection)
 
 ### How It Works
@@ -132,7 +132,7 @@ Where:
 - **QA Testing**: 11.4s (98% confidence)
 - **Insider Threat**: 17.3s (90% confidence)
 
-**Cost/Value Optimization**: For high-volume environments, route low-value transactions (< $50) to faster models (Haiku) and reserve premium models (Sonnet 4.5) for high-value or business-critical alerts.
+**Cost/Value Optimization**: For high-volume environments, route low value transactions (< $50) to faster models (Haiku) and reserve premium models (Sonnet 4.5) for high value or business critical alerts.
 
 ### Configuration
 
@@ -242,8 +242,8 @@ Raw Alert → Normalize → Scrub PII → Prompt Engine → Claude → Structure
 
 - **PII Redaction**: Microsoft Presidio removes sensitive data before API transmission
 - **Prompt Injection Defense**: XML delimiters prevent malicious log entries from hijacking triage logic
-- **Schema Validation**: Pydantic ensures only well-formed data enters the system
-- **API Key Rotation**: Environment-based configuration for zero-trust deployments
+- **Schema Validation**: Pydantic ensures only well formed data enters the system
+- **API Key Rotation**: Environment-based configuration for zero trust deployments
 - **Audit Trail**: Complete logging of all triage decisions (SIEM-ready)
 
 ### Audit-Ready Logging for Fintech Compliance
@@ -311,7 +311,7 @@ All Chronicle data flows through the "Sandwich Model" security gates:
 
 **Outbound (Green Gate - Middleware → Chronicle)**:
 - Case data: **Configurable scrubbing** (default: false for internal Chronicle)
-- UDM annotations: **ALWAYS scrubbed** (long-term storage compliance, non-configurable)
+- UDM annotations: **ALWAYS scrubbed** (long term storage compliance, non-configurable)
 
 ### PII Decision Matrix
 
@@ -409,7 +409,7 @@ See [`docs/chronicle_yara_rules/idor_detection.yaral`](docs/chronicle_yara_rules
 
 **UDM Event Annotation** (AI Context for Analysts):
 - Original UDM events annotated with AI triage results
-- Annotations **always PII-scrubbed** (compliance, long-term storage)
+- Annotations **always PII-scrubbed** (compliance, long term storage)
 - Future Chronicle searches surface AI context automatically
 
 Example annotation:
@@ -851,7 +851,7 @@ scrubber.presidio_entities = [
 
 **After Scrubber** (Context-Preserving):
 - Risk: Zero PII exposure to external APIs
-- Compliance: GDPR compliant, audit-ready
+- Compliance: GDPR compliant, audit ready
 - Trust: Legal/Security approve production deployment
 - Quality: LLM analysis remains highly accurate
 
@@ -870,7 +870,7 @@ SSN:             123-45-6789           → [SSN_VAULTED]  # Tokenized reference 
 ```
 
 **Why This Matters**:
-- Sending a Primary Account Number (PAN) to a third-party LLM API is a **PCI Level 1 violation**
+- Sending a Primary Account Number (PAN) to a third party LLM API is a **PCI Level 1 violation**
 - Penalties: Fines up to $500,000 per incident + loss of card processing privileges
 - Our regex-based scrubber detects 16-digit PANs **before** they reach the LLM provider
 - Presidio mode adds ML-based validation for obfuscated formats (e.g., `4532 1234 5678 9010`)
@@ -879,7 +879,7 @@ SSN:             123-45-6789           → [SSN_VAULTED]  # Tokenized reference 
 
 ### Design Philosophy: Context-Preserving Privacy
 
-Traditional PII scrubbers present a binary choice: either remove everything and destroy analytical context, or let everything through and create compliance risk. This implementation solves both problems through selective, context-aware scrubbing.
+Traditional PII scrubbers present a binary choice: either remove everything and destroy analytical context, or let everything through and create compliance risk. This implementation solves both problems through selective, context aware scrubbing.
 
 **Dual-Mode Architecture for Reliability**
 
@@ -986,7 +986,7 @@ In regulated environments, we cannot treat the LLM as a trusted component. The m
 
 ### The Attacker's Journey: Understanding IDOR Enumeration
 
-Most IDOR (Insecure Direct Object Reference) attacks follow a predictable pattern: an attacker discovers a sequential resource ID scheme and iterates through IDs to find unauthorized data. Traditional detection systems fail because they can't distinguish between legitimate multi-resource access and malicious enumeration.
+Most IDOR (Insecure Direct Object Reference) attacks follow a predictable pattern: an attacker discovers a sequential resource ID scheme and iterates through IDs to find unauthorized data. Traditional detection systems fail because they can't distinguish between legitimate multi resource access and malicious enumeration.
 
 **The Challenge**: A user with 15 legitimate loan applications looks identical to an attacker probing 15 unauthorized loans—until you understand **ownership context**.
 
@@ -994,7 +994,7 @@ Most IDOR (Insecure Direct Object Reference) attacks follow a predictable patter
 
 ### From Silent Logs to Actionable Intelligence
 
-Traditional security tools generate logs that require manual correlation and analysis. This middleware transforms raw authorization failures into high-confidence attack signals by correlating multiple telemetry layers in real-time.
+Traditional security tools generate logs that require manual correlation and analysis. This middleware transforms raw authorization failures into high confidence attack signals by correlating multiple telemetry layers in real time.
 
 | Traditional Log (Silent) | llm-soc-triage Output (Actionable) |
 |--------------------------|-----------------------------------|
@@ -1020,7 +1020,7 @@ Tracks failures across unique `loan_id` objects within a 60-second sliding windo
 
 **Outcome**: The system distinguishes between a "broken link" (1 failure) and an "active exploit" (3+ unique ID failures across OTHER users' resources), reducing Tier 1 analyst noise by approximately 90%.
 
-**Key Innovation**: Track resource ownership from telemetry and **only alert on attempts to access OTHER users' resources**. This eliminates false positives from legitimate multi-resource users while maintaining zero false negatives on real attacks.
+**Key Innovation**: Track resource ownership from telemetry and **only alert on attempts to access OTHER users' resources**. This eliminates false positives from legitimate multi resource users while maintaining zero false negatives on real attacks.
 
 **Architecture Diagram**:
 
@@ -1256,7 +1256,7 @@ TTL: 60 seconds (sliding window, automatic cleanup)
 When a pattern is detected, the LLM analyzes:
 1. **User History**: Known pentester? QA account? New signup?
 2. **Deployment Events**: Recent API changes affecting ownership checks?
-3. **Business Context**: Legitimate reason for multi-loan access (loan officer, customer support)?
+3. **Business Context**: Legitimate reason for multi loan access (loan officer, customer support)?
 
 Example LLM analysis:
 ```json
@@ -1282,7 +1282,7 @@ Example LLM analysis:
 
 The ownership-aware detection approach tracks which loans each user created/owns via telemetry. If a user accesses 10 of their own loans, that's legitimate business activity and generates no alert. However, if they access 3+ loans owned by other users within 60 seconds—especially sequentially—that's a clear IDOR attack pattern. 
 
-The system only tracks authorization failures on resources the user doesn't own. This architectural decision eliminates approximately 90% of false positives that plague traditional rate-limiting systems, particularly in scenarios involving legitimate multi-loan users.
+The system only tracks authorization failures on resources the user doesn't own. This architectural decision eliminates approximately 90% of false positives that plague traditional rate-limiting systems, particularly in scenarios involving legitimate multi loan users.
 
 **Middleware Placement and Performance**
 
@@ -1296,7 +1296,7 @@ The AI component serves as a contextual analysis layer rather than a primary det
 
 - User identity: Known internal tester? QA automation account? New signup?
 - Deployment events: Recent API changes affecting ownership validation?
-- Business context: Legitimate reason for multi-loan access (loan officer, customer support)?
+- Business context: Legitimate reason for multi loan access (loan officer, customer support)?
 - Historical behavior: First-time pattern or recurring activity?
 
 This approach prevents alert fatigue from legitimate edge cases while maintaining zero false negatives on actual attacks. The LLM receives only scrubbed telemetry, ensuring PII protection even during contextual analysis.
@@ -1307,7 +1307,7 @@ This approach prevents alert fatigue from legitimate edge cases while maintainin
 
 1. **Phase 1**: Deploy monitor in "shadow mode" (log-only, no blocking)
 2. **Phase 2**: Enable low-confidence alerts (human review queue)
-3. **Phase 3**: Enable auto-hold for high-confidence (sequential IDOR with no QA tag)
+3. **Phase 3**: Enable auto-hold for high confidence (sequential IDOR with no QA tag)
 4. **Phase 4**: Full integration with SOAR playbooks and auto-remediation
 
 ### Component Separation
@@ -1540,7 +1540,7 @@ Phase 4 (Full Production) Success:
 | Standard | Implementation | Benefit |
 |----------|----------------|---------|
 | **GDPR** | Local PII Redaction (Presidio ML + Regex) | Data Minimization: PII never hits external APIs. Zero exposure in 10K+ daily alerts (6 months). |
-| **PCI-DSS** | CC Pattern Scrubbing + Audit Logs | No cardholder data exposure to third-party LLMs. Audit-ready logging (90-day retention). |
+| **PCI-DSS** | CC Pattern Scrubbing + Audit Logs | No cardholder data exposure to third party LLMs. Audit-ready logging (90-day retention). |
 | **HIPAA** | PHI Scrubbing + Breach Notification | SSN/Medical ID redaction. Auto-SOAR incident creation (<5s detection → alert). |
 | **SOC 2 Type II** | Ownership-Aware IDOR Monitoring | Zero-trust resource validation. 95%+ detection rate, <2% false positives. |
 | **MITRE ATT&CK** | Dynamic Tactic/Technique Mapping | TA0009 (Collection) + T1213.002 for sequential IDOR. Clickable URLs in SOAR alerts. |
